@@ -22,7 +22,362 @@
  end
  Browser --&amp;gt; Pages
  Source --&amp;gt; Actions
- Actions --&amp;gt; Pages&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;旧文章 URL 保持不变（如 &lt;code&gt;/koa-jwt.html&lt;/code&gt;），外链无需修改。&lt;/p&gt;</description></item><item><title>hapi-confidence</title><link>https://joesmile.github.io/hapi-confidence.html</link><pubDate>Mon, 16 Sep 2019 10:46:51 +0800</pubDate><guid>https://joesmile.github.io/hapi-confidence.html</guid><description>&lt;img src="https://joesmile.github.io/images/covers/confidence_logo.png" alt="featured image" referrerpolicy="no-referrer"&gt;&lt;blockquote&gt;
+ Actions --&amp;gt; Pages&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;旧文章 URL 保持不变（如 &lt;code&gt;/koa-jwt.html&lt;/code&gt;），外链无需修改。&lt;/p&gt;</description></item><item><title>Next.js 15 SEO 核心优化全解（AI 知识库项目实战向）</title><link>https://joesmile.github.io/nextjs-seo.html</link><pubDate>Mon, 08 Jun 2026 14:00:00 +0800</pubDate><guid>https://joesmile.github.io/nextjs-seo.html</guid><category domain="https://joesmile.github.io/categories/%E5%89%8D%E7%AB%AF/">前端</category><description>&lt;p&gt;Next.js 是目前&lt;strong&gt;对 SEO 最友好的 React 全栈框架之一&lt;/strong&gt;。它从架构上缓解了传统纯 CSR（客户端渲染）SPA 的索引难题，并提供 Metadata API、Sitemap/Robots 约定式路由等工具链，特别适合&lt;strong&gt;文档站、知识库、AI 产品落地页&lt;/strong&gt;这类需要被搜索到的 App Router 项目。&lt;/p&gt;
+&lt;h2 class="heading-element" id="一核心优势从架构上缓解-spa-的-seo-痛点"&gt;&lt;span&gt;一、核心优势：从架构上缓解 SPA 的 SEO 痛点&lt;/span&gt;
+ &lt;a href="#%e4%b8%80%e6%a0%b8%e5%bf%83%e4%bc%98%e5%8a%bf%e4%bb%8e%e6%9e%b6%e6%9e%84%e4%b8%8a%e7%bc%93%e8%a7%a3-spa-%e7%9a%84-seo-%e7%97%9b%e7%82%b9" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;纯 CSR 应用的典型问题：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;首屏 HTML 往往只有壳：&lt;code&gt;&amp;lt;div id=&amp;quot;root&amp;quot;&amp;gt;&amp;lt;/div&amp;gt;&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;关键内容依赖 JS hydration 后才出现&lt;/li&gt;
+&lt;li&gt;爬虫&lt;strong&gt;可以&lt;/strong&gt;执行 JavaScript（Google 已支持多年），但抓取成本高、延迟大，且对 CSR 内容的索引&lt;strong&gt;不如&lt;/strong&gt;服务端直出的 HTML 稳定&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Next.js App Router 的价值在于：&lt;strong&gt;公开内容优先在服务端生成 HTML&lt;/strong&gt;，让爬虫拿到可读的标题、正文与链接，减少对纯客户端渲染时序的依赖。&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;渲染模式&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;SEO 友好度&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;典型场景&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;SSG 静态生成&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;⭐⭐⭐⭐⭐&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;官网首页、帮助文档、固定知识库目录&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;ISR 增量静态再生&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;⭐⭐⭐⭐⭐&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;会更新但可缓存的知识库详情、Agent 介绍页&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;SSR 服务端渲染&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;⭐⭐⭐⭐&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;强实时、强个性化页面&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;PPR 部分预渲染&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;⭐⭐⭐⭐&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;静态外壳 + 动态区块（见下文版本说明）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;CSR 客户端渲染&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;⭐&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;后台、个人中心、纯交互面板&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;版本说明&lt;/strong&gt;：PPR 在 &lt;strong&gt;Next.js 15&lt;/strong&gt; 仍为 &lt;code&gt;experimental.ppr&lt;/code&gt; 实验能力；&lt;strong&gt;Next.js 16&lt;/strong&gt; 起以 Cache Components（&lt;code&gt;cacheComponents: true&lt;/code&gt;）成为稳定默认路径。下文 PPR 思路在 16 上更成熟，15 项目请先确认能否接受实验 flag。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;strong&gt;AI 知识库类项目的推荐组合&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;公开页（首页、文档、知识库详情）→ &lt;strong&gt;SSG / ISR&lt;/strong&gt;，兼顾索引与更新&lt;/li&gt;
+&lt;li&gt;聊天主界面 → 静态布局（导航、标题）服务端输出；会话内容放 Client Component，并用 &lt;code&gt;robots&lt;/code&gt; / &lt;code&gt;noindex&lt;/code&gt; 控制是否索引&lt;/li&gt;
+&lt;li&gt;管理后台 → 纯 CSR，配合登录与 &lt;code&gt;noindex&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 class="heading-element" id="二nextjs-15-内置-seo-工具链"&gt;&lt;span&gt;二、Next.js 15 内置 SEO 工具链&lt;/span&gt;
+ &lt;a href="#%e4%ba%8cnextjs-15-%e5%86%85%e7%bd%ae-seo-%e5%b7%a5%e5%85%b7%e9%93%be" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="1-metadata-api"&gt;&lt;span&gt;1. Metadata API&lt;/span&gt;
+ &lt;a href="#1-metadata-api" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;统一管理 &lt;code&gt;&amp;lt;head&amp;gt;&lt;/code&gt; 元数据，支持静态 &lt;code&gt;export const metadata&lt;/code&gt; 与动态 &lt;code&gt;generateMetadata&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;keywords&lt;/code&gt; 在 Google 中的权重已较低，&lt;strong&gt;可优先完善 &lt;code&gt;title&lt;/code&gt;、&lt;code&gt;description&lt;/code&gt;、Open Graph 与 canonical&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;静态页面&lt;/strong&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;// app/page.tsx
+import type { Metadata } from &amp;#34;next&amp;#34;;
+
+export const metadata: Metadata = {
+ metadataBase: new URL(&amp;#34;https://example.com&amp;#34;),
+ title: &amp;#34;MyKB - 个人 AI 知识库&amp;#34;,
+ description: &amp;#34;基于 RAG 与 Agent 的个人知识管理工具&amp;#34;,
+ openGraph: {
+ title: &amp;#34;MyKB AI 知识库&amp;#34;,
+ description: &amp;#34;用 AI 管理你的知识&amp;#34;,
+ images: [&amp;#34;/og-image.png&amp;#34;],
+ },
+ twitter: {
+ card: &amp;#34;summary_large_image&amp;#34;,
+ },
+ alternates: {
+ canonical: &amp;#34;/&amp;#34;,
+ },
+};&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;&lt;strong&gt;动态页面&lt;/strong&gt;（Next.js 15 起 &lt;code&gt;params&lt;/code&gt; 为 Promise，需 &lt;code&gt;await&lt;/code&gt;）：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;// app/knowledge/[id]/page.tsx
+import type { Metadata } from &amp;#34;next&amp;#34;;
+
+type Props = { params: Promise&amp;lt;{ id: string }&amp;gt; };
+
+export async function generateMetadata({ params }: Props): Promise&amp;lt;Metadata&amp;gt; {
+ const { id } = await params;
+ const kb = await getKnowledgeBase(id);
+ const description =
+ kb.description.length &amp;gt; 160
+ ? `${kb.description.slice(0, 157)}...`
+ : kb.description;
+
+ return {
+ title: `${kb.name} - MyKB`,
+ description,
+ openGraph: {
+ images: [kb.coverImage ?? &amp;#34;/default-og.png&amp;#34;],
+ },
+ alternates: {
+ canonical: `/knowledge/${id}`,
+ },
+ };
+}&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;&lt;code&gt;metadataBase&lt;/code&gt; 让相对路径的 OG 图片、canonical 自动补全为绝对 URL，避免分享卡片链接错误。&lt;/p&gt;
+&lt;h3 class="heading-element" id="2-sitemap-与-robots约定式路由"&gt;&lt;span&gt;2. Sitemap 与 Robots（约定式路由）&lt;/span&gt;
+ &lt;a href="#2-sitemap-%e4%b8%8e-robots%e7%ba%a6%e5%ae%9a%e5%bc%8f%e8%b7%af%e7%94%b1" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;Next.js 通过 &lt;code&gt;app/sitemap.ts&lt;/code&gt;、&lt;code&gt;app/robots.ts&lt;/code&gt; &lt;strong&gt;生成&lt;/strong&gt;对应路由；业务 URL 列表仍需在代码中维护，属于约定式路由而非完全零配置。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;// app/sitemap.ts
+import type { MetadataRoute } from &amp;#34;next&amp;#34;;
+
+export default async function sitemap(): Promise&amp;lt;MetadataRoute.Sitemap&amp;gt; {
+ const kbs = await getKnowledgeBases();
+ const kbEntries = kbs.map((kb) =&amp;gt; ({
+ url: `https://example.com/knowledge/${kb.id}`,
+ lastModified: kb.updatedAt,
+ changeFrequency: &amp;#34;weekly&amp;#34; as const,
+ priority: 0.8,
+ }));
+
+ return [
+ {
+ url: &amp;#34;https://example.com&amp;#34;,
+ lastModified: new Date(),
+ changeFrequency: &amp;#34;monthly&amp;#34;,
+ priority: 1,
+ },
+ ...kbEntries,
+ ];
+}&lt;/code&gt;&lt;/pre&gt;&lt;pre&gt;&lt;code&gt;// app/robots.ts
+import type { MetadataRoute } from &amp;#34;next&amp;#34;;
+
+export default function robots(): MetadataRoute.Robots {
+ return {
+ rules: {
+ userAgent: &amp;#34;*&amp;#34;,
+ allow: &amp;#34;/&amp;#34;,
+ disallow: [&amp;#34;/dashboard&amp;#34;, &amp;#34;/chat/&amp;#34;],
+ },
+ sitemap: &amp;#34;https://example.com/sitemap.xml&amp;#34;,
+ };
+}&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;私有页除 &lt;code&gt;robots.txt&lt;/code&gt; 外，还可在页面 metadata 中加 &lt;code&gt;robots: { index: false }&lt;/code&gt;，双保险更稳妥。&lt;/p&gt;
+&lt;h3 class="heading-element" id="3-结构化数据json-ld"&gt;&lt;span&gt;3. 结构化数据（JSON-LD）&lt;/span&gt;
+ &lt;a href="#3-%e7%bb%93%e6%9e%84%e5%8c%96%e6%95%b0%e6%8d%aejson-ld" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;帮助搜索引擎理解页面语义，有机会获得富摘要（FAQ、文章等）。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;// app/knowledge/[id]/page.tsx
+export default async function KnowledgeBasePage({ params }: Props) {
+ const { id } = await params;
+ const kb = await getKnowledgeBase(id);
+
+ const jsonLd = {
+ &amp;#34;@context&amp;#34;: &amp;#34;https://schema.org&amp;#34;,
+ &amp;#34;@type&amp;#34;: &amp;#34;Article&amp;#34;,
+ headline: kb.name,
+ description: kb.description,
+ datePublished: kb.createdAt,
+ dateModified: kb.updatedAt,
+ author: { &amp;#34;@type&amp;#34;: &amp;#34;Person&amp;#34;, name: kb.authorName },
+ };
+
+ return (
+ &amp;lt;&amp;gt;
+ &amp;lt;script
+ type=&amp;#34;application/ld&amp;#43;json&amp;#34;
+ dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+ /&amp;gt;
+ {/* 页面内容 */}
+ &amp;lt;/&amp;gt;
+ );
+}&lt;/code&gt;&lt;/pre&gt;&lt;h2 class="heading-element" id="三性能优化与-seocore-web-vitals"&gt;&lt;span&gt;三、性能优化与 SEO（Core Web Vitals）&lt;/span&gt;
+ &lt;a href="#%e4%b8%89%e6%80%a7%e8%83%bd%e4%bc%98%e5%8c%96%e4%b8%8e-seocore-web-vitals" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;Google 将 &lt;strong&gt;Core Web Vitals（核心网页指标，CWV）&lt;/strong&gt; 作为排名信号之一——衡量的是用户打开页面时的&lt;strong&gt;真实体验&lt;/strong&gt;，与代码风格、项目架构是否「优雅」无直接关系。当前看这三项：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;LCP&lt;/strong&gt;（Largest Contentful Paint，最大内容绘制）：主内容多快出现在屏幕上&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;INP&lt;/strong&gt;（Interaction to Next Paint，交互到下次绘制）：点按钮、输入后页面多快有反应（已取代旧指标 FID）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;CLS&lt;/strong&gt;（Cumulative Layout Shift，累积布局偏移）：加载过程中页面会不会突然「跳一下」&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Next.js 常见优化与 SEO 的对应关系：&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;能力&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;主要改善指标&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;RSC + 按路由代码分割&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;LCP、INP（减少首屏 JS）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;next/image&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;LCP、CLS&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;next/font&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;CLS、LCP&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;Link 预取&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;站内导航 INP&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 class="heading-element" id="怎么量seo-与性能常用工具"&gt;&lt;span&gt;怎么量：SEO 与性能常用工具&lt;/span&gt;
+ &lt;a href="#%e6%80%8e%e4%b9%88%e9%87%8fseo-%e4%b8%8e%e6%80%a7%e8%83%bd%e5%b8%b8%e7%94%a8%e5%b7%a5%e5%85%b7" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;做 Next.js SEO，除了写 Metadata，还可以用工具&lt;strong&gt;验证&lt;/strong&gt;「搜索引擎能否抓取、用户访问是否顺畅」。以下工具名称多为英文缩写，可按用途对照使用：&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;工具&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;全称 / 来源&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;干什么用&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;什么时候打开&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;Lighthouse&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Chrome 内置审计工具&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;在&lt;strong&gt;你的电脑&lt;/strong&gt;上模拟跑分，给出 CWV 建议和可优化项&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;改完代码、上线前本地自测&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;CrUX&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;Chrome User Experience Report&lt;/strong&gt;（Chrome 用户体验报告）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Google 汇总&lt;strong&gt;真实 Chrome 用户&lt;/strong&gt;访问你网站时的 CWV 数据（现场数据，Field Data）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;看「用户上网时到底快不快」；Google 排名更参考这类数据&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;PageSpeed Insights&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Google 在线测速站 &lt;a href="https://pagespeed.web.dev/" target="_blank" rel="external nofollow noopener noreferrer"&gt;pagespeed.web.dev&lt;/a&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;输入 URL，&lt;strong&gt;同时&lt;/strong&gt;展示 CrUX（若有）+ Lighthouse 实验室分数&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;需要快速查看单页 CrUX 与 Lighthouse 时&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;Search Console&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;Google Search Console&lt;/strong&gt;（Google 搜索控制台）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;查看网站被 Google &lt;strong&gt;索引&lt;/strong&gt;的情况：哪些页已收录、有无抓取错误、CWV 是否达标&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;站点上线后绑定域名；提交 Sitemap&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;CrUX Dashboard&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Chrome 官方 CrUX 看板&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;按**整个域名（origin）**看 28 天 CWV 趋势，比单页 PSI 更宏观&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;有稳定流量后做复盘、写优化周报&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;建议将以下两类数据分开理解，便于对照 Lighthouse 分数与线上表现：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;实验室数据（Lab Data）&lt;/strong&gt;：Lighthouse 在本机或 CI 中跑出的结果——环境可控、可复现，适合&lt;strong&gt;开发阶段&lt;/strong&gt;定位问题。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;现场数据（Field Data）&lt;/strong&gt;：CrUX 来自真实用户——受网络、设备、地区等因素影响，与 Lighthouse 分数&lt;strong&gt;可能存在差异&lt;/strong&gt;。Google 评估排名时，更侧重现场数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;访问说明&lt;/strong&gt;：Search Console、PageSpeed Insights、CrUX 均为 Google 服务；若当前网络环境不便访问，开发阶段可先用 Chrome DevTools → Lighthouse 做实验室审计，待条件允许时再补充现场数据。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;不同项目在网络、数据量、部署环境下的表现差异较大，&lt;strong&gt;建议用 Lighthouse（实验室）与 CrUX（现场）交叉验证&lt;/strong&gt;，避免引用固定倍数。新站流量较少时，CrUX 可能显示「No Data」，可先以 Lighthouse 迭代优化，待访问量积累后再查看 CrUX。&lt;/p&gt;
+&lt;h2 class="heading-element" id="四ai-应用的特殊注意点"&gt;&lt;span&gt;四、AI 应用的特殊注意点&lt;/span&gt;
+ &lt;a href="#%e5%9b%9bai-%e5%ba%94%e7%94%a8%e7%9a%84%e7%89%b9%e6%ae%8a%e6%b3%a8%e6%84%8f%e7%82%b9" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="1-公开知识库内容ssg--isr而非纯-csr"&gt;&lt;span&gt;1. 公开知识库内容：SSG / ISR，而非纯 CSR&lt;/span&gt;
+ &lt;a href="#1-%e5%85%ac%e5%bc%80%e7%9f%a5%e8%af%86%e5%ba%93%e5%86%85%e5%ae%b9ssg--isr%e8%80%8c%e9%9d%9e%e7%ba%af-csr" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;可被索引的正文应在 Server Component 或静态/增量静态路径中输出&lt;/li&gt;
+&lt;li&gt;内容更新后调用 &lt;code&gt;revalidatePath()&lt;/code&gt; / &lt;code&gt;revalidateTag()&lt;/code&gt; 触发再生成&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 class="heading-element" id="2-聊天页索引边界要刻意设计"&gt;&lt;span&gt;2. 聊天页：索引边界要刻意设计&lt;/span&gt;
+ &lt;a href="#2-%e8%81%8a%e5%a4%a9%e9%a1%b5%e7%b4%a2%e5%bc%95%e8%be%b9%e7%95%8c%e8%a6%81%e5%88%bb%e6%84%8f%e8%ae%be%e8%ae%a1" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;壳层（标题、导航、产品介绍）可索引&lt;/li&gt;
+&lt;li&gt;会话消息、用户输入通常&lt;strong&gt;不需要&lt;/strong&gt;被索引；可配合 &lt;code&gt;robots.txt&lt;/code&gt; disallow 与页面 &lt;code&gt;noindex&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;PPR / Suspense 适合「静态壳 + 流式动态区」，但 15 上 PPR 仍为实验能力&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 class="heading-element" id="3-ai-生成内容"&gt;&lt;span&gt;3. AI 生成内容&lt;/span&gt;
+ &lt;a href="#3-ai-%e7%94%9f%e6%88%90%e5%86%85%e5%ae%b9" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;批量、重复且缺乏信息增量的 AI 文案，可能触发搜索引擎的质量策略；&lt;strong&gt;内容质量与原创性&lt;/strong&gt;仍是长期有效的做法&lt;/li&gt;
+&lt;li&gt;若做「问答落地页」，每个 URL 建议配置独立的 title/description 与合理的 JSON-LD&lt;/li&gt;
+&lt;li&gt;以 SEO 为目的、缺少实质信息的聚合页（doorway page）风险较高，一般不建议采用&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 class="heading-element" id="五实践中的几个注意点"&gt;&lt;span&gt;五、实践中的几个注意点&lt;/span&gt;
+ &lt;a href="#%e4%ba%94%e5%ae%9e%e8%b7%b5%e4%b8%ad%e7%9a%84%e5%87%a0%e4%b8%aa%e6%b3%a8%e6%84%8f%e7%82%b9" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="注意点-1公开页是否都需要-ssr"&gt;&lt;span&gt;注意点 1：公开页是否都需要 SSR&lt;/span&gt;
+ &lt;a href="#%e6%b3%a8%e6%84%8f%e7%82%b9-1%e5%85%ac%e5%bc%80%e9%a1%b5%e6%98%af%e5%90%a6%e9%83%bd%e9%9c%80%e8%a6%81-ssr" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;公开、可缓存内容采用 SSG/ISR 通常性能更好，SEO 效果与 SSR 相当；SSR 更适合强实时、强个性化的场景。&lt;/p&gt;
+&lt;h3 class="heading-element" id="注意点-2seo-关键内容的渲染位置"&gt;&lt;span&gt;注意点 2：SEO 关键内容的渲染位置&lt;/span&gt;
+ &lt;a href="#%e6%b3%a8%e6%84%8f%e7%82%b9-2seo-%e5%85%b3%e9%94%ae%e5%86%85%e5%ae%b9%e7%9a%84%e6%b8%b2%e6%9f%93%e4%bd%8d%e7%bd%ae" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;Google 可以渲染 JavaScript，但抓取与索引 JS 内容的&lt;strong&gt;成本更高、时延更长、稳定性相对较弱&lt;/strong&gt;。标题、首段正文、内链建议在服务端 HTML 中即可见。&lt;/p&gt;
+&lt;h3 class="heading-element" id="注意点-3规范-urlcanonical"&gt;&lt;span&gt;注意点 3：规范 URL（Canonical）&lt;/span&gt;
+ &lt;a href="#%e6%b3%a8%e6%84%8f%e7%82%b9-3%e8%a7%84%e8%8c%83-urlcanonical" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;带 query、分页、追踪参数可能产生重复 URL；可通过 &lt;code&gt;alternates.canonical&lt;/code&gt; 指定规范地址。&lt;/p&gt;
+&lt;h3 class="heading-element" id="注意点-4sitemap-提交与持续观测"&gt;&lt;span&gt;注意点 4：Sitemap 提交与持续观测&lt;/span&gt;
+ &lt;a href="#%e6%b3%a8%e6%84%8f%e7%82%b9-4sitemap-%e6%8f%90%e4%ba%a4%e4%b8%8e%e6%8c%81%e7%bb%ad%e8%a7%82%e6%b5%8b" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;sitemap.xml&lt;/code&gt; 生成后，建议在 &lt;strong&gt;Google Search Console（搜索控制台）&lt;/strong&gt; 中提交，并定期查看「网页索引」与「核心网页指标」报告——前者反映&lt;strong&gt;收录与抓取&lt;/strong&gt;，后者反映&lt;strong&gt;用户侧性能&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 class="heading-element" id="六总结"&gt;&lt;span&gt;六、总结&lt;/span&gt;
+ &lt;a href="#%e5%85%ad%e6%80%bb%e7%bb%93" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;Next.js 15 的 SEO 能力分三层：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;架构&lt;/strong&gt;：SSG / ISR / SSR /（实验性）PPR，让公开 HTML 可读&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;工具&lt;/strong&gt;：Metadata API、Sitemap、Robots、JSON-LD&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;性能&lt;/strong&gt;：RSC、图片/字体优化、代码分割 → 改善 LCP / INP / CLS&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;AI 知识库项目的最小 checklist：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li data-task=" " title="未完成"&gt;&lt;i class="checkbox-icon fa-regular fa-square" aria-hidden="true"&gt;&lt;/i&gt;公开页 ISR + 动态 &lt;code&gt;generateMetadata&lt;/code&gt;&lt;/li&gt;
+&lt;li data-task=" " title="未完成"&gt;&lt;i class="checkbox-icon fa-regular fa-square" aria-hidden="true"&gt;&lt;/i&gt;&lt;code&gt;metadataBase&lt;/code&gt; + canonical + OG 图&lt;/li&gt;
+&lt;li data-task=" " title="未完成"&gt;&lt;i class="checkbox-icon fa-regular fa-square" aria-hidden="true"&gt;&lt;/i&gt;&lt;code&gt;sitemap.ts&lt;/code&gt; / &lt;code&gt;robots.ts&lt;/code&gt; 并提交 Search Console&lt;/li&gt;
+&lt;li data-task=" " title="未完成"&gt;&lt;i class="checkbox-icon fa-regular fa-square" aria-hidden="true"&gt;&lt;/i&gt;聊天/后台 &lt;code&gt;noindex&lt;/code&gt; 或 disallow&lt;/li&gt;
+&lt;li data-task=" " title="未完成"&gt;&lt;i class="checkbox-icon fa-regular fa-square" aria-hidden="true"&gt;&lt;/i&gt;开发阶段用 &lt;strong&gt;Lighthouse&lt;/strong&gt; 查问题；上线后用 &lt;strong&gt;PageSpeed Insights / CrUX&lt;/strong&gt; 看真实用户 CWV&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 class="heading-element" id="相关"&gt;&lt;span&gt;相关&lt;/span&gt;
+ &lt;a href="#%e7%9b%b8%e5%85%b3" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://nextjs.org/docs/app/building-your-application/optimizing/metadata" target="_blank" rel="external nofollow noopener noreferrer"&gt;Next.js Metadata 文档&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/sitemap" target="_blank" rel="external nofollow noopener noreferrer"&gt;Next.js Sitemap&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://pagespeed.web.dev/" target="_blank" rel="external nofollow noopener noreferrer"&gt;PageSpeed Insights&lt;/a&gt;（CrUX + Lighthouse 一站式）&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://search.google.com/search-console" target="_blank" rel="external nofollow noopener noreferrer"&gt;Google Search Console&lt;/a&gt;（索引与 CWV 报告）&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://developer.chrome.com/docs/crux" target="_blank" rel="external nofollow noopener noreferrer"&gt;CrUX 官方说明&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://web.dev/articles/inp" target="_blank" rel="external nofollow noopener noreferrer"&gt;Web Vitals（INP 说明）&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description></item><item><title>hapi-confidence</title><link>https://joesmile.github.io/hapi-confidence.html</link><pubDate>Mon, 16 Sep 2019 10:46:51 +0800</pubDate><guid>https://joesmile.github.io/hapi-confidence.html</guid><description>&lt;img src="https://joesmile.github.io/images/covers/confidence_logo.png" alt="featured image" referrerpolicy="no-referrer"&gt;&lt;blockquote&gt;
 &lt;p&gt;记录一个confidence插件，简单明了地根据不同环境变量更换配置。平时我们写 config 或者 settings 文件要仔细区分环境，参数值比较混乱，难管理。有了 confidence 插件之后，再也不用担心环境参数混乱的问题了。&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;p&gt;&lt;strong&gt;confidence 地址&lt;/strong&gt;&lt;br&gt;
@@ -487,40 +842,4 @@ demo传送门 &lt;a href="https://github.com/JoeSmile/hapi-confidence" target="_
 &lt;p&gt;在以上代码，原本想点击Add one 渲染多个inputRadio 组件，从而进行Yes or No的选择。但以上有2个错误。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;错误1. 在组件内部 id 不唯一。 在多次进行inputRadio时候会渲染多个id为yes 和 no的input组件。从而使label总绑定到第一个input上。&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;错误2. 在input中使用name时候，名字一样， 导致多次渲染inputRadio时候无法准确定位input。&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;正确代码可以将 id 和 name 加上时间戳编程唯一的 id / name。&lt;/p&gt;</description></item><item><title>node generate pdf solutions(pdf 解决方案)</title><link>https://joesmile.github.io/nodepdf.html</link><pubDate>Wed, 21 Aug 2019 11:40:46 +0800</pubDate><guid>https://joesmile.github.io/nodepdf.html</guid><category domain="https://joesmile.github.io/categories/node/">Node</category><description>&lt;p&gt;当当当，今天分享下如何生成pfd一个高效的解决方案。在管理系统中，我们需要将页面的内容打印 PDF 和 excel。HTML 打印 PDF 有很多方法，比如先将页面转换成canvas，然后打印canvas等。今天我们介绍2个 npm包，来帮助我们打印出来我们想要的PDF。其实打印pdf这个事儿主要工作在后端，众所周知前端能够做的东西有限，有限，，，&lt;/p&gt;
-&lt;h5 class="heading-element" id="思路"&gt;&lt;span&gt;思路&lt;/span&gt;
- &lt;a href="#%e6%80%9d%e8%b7%af" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h5&gt;&lt;p&gt;1.在页面上点击打印，把需要打印的内容传送给后台&lt;/p&gt;
-&lt;p&gt;2.在后端生成对应页面的template（或者是先生成好的）&lt;/p&gt;
-&lt;p&gt;3.向template中填充前端传来的数据&lt;/p&gt;
-&lt;p&gt;4.生成用数据的 HTML 页面并打印&lt;/p&gt;
-&lt;h3 class="heading-element" id="一-handlerbars"&gt;&lt;span&gt;一. handlerbars&lt;/span&gt;
- &lt;a href="#%e4%b8%80-handlerbars" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;&lt;em&gt;官网: &lt;a href="http://handlebarsjs.com/" target="_blank" rel="external nofollow noopener noreferrer"&gt;http://handlebarsjs.com/&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;用这个包让我们可以把我们想要打的页面模版化。用handerbars在后台生成一个供我们打印pdf的 pdf.html 模版（调整好样式），随时等着前端发送打印请求。&lt;/p&gt;
-&lt;p&gt;下面介绍下handlerbars的基本用法。&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='nodepdf/nodePDF2.png' alt="nodepdf/nodePDF2.png"&gt;&lt;/p&gt;
-&lt;p&gt;以上demo来自官网，细节和语法请参照官网。&lt;/p&gt;
-&lt;h4 class="heading-element" id="优点"&gt;&lt;span&gt;&lt;strong&gt;优点&lt;/strong&gt;&lt;/span&gt;
- &lt;a href="#%e4%bc%98%e7%82%b9" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;可以灵活的调整页面；可以注册函数，使用函数渲染列表；支持if／else渲染；如需要渲染图片，需用base64格式；学习成本低等&lt;/p&gt;
-&lt;h4 class="heading-element" id="缺点"&gt;&lt;span&gt;&lt;strong&gt;缺点&lt;/strong&gt;&lt;/span&gt;
- &lt;a href="#%e7%bc%ba%e7%82%b9" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;需要在后台重新写一套样式&lt;/p&gt;
-&lt;hr&gt;
-&lt;p&gt;二.node-html-pdf&lt;/p&gt;
-&lt;p&gt;Github: &lt;a href="https://github.com/marcbachmann/node-html-pdf" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://github.com/marcbachmann/node-html-pdf&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;又一个上手快的npm包，api简单明了,以下是核心代码
-&lt;img loading="lazy" src='nodepdf/nodePDF1.png' alt="nodepdf/nodePDF1.png"&gt;&lt;/p&gt;
-&lt;p&gt;这里用到用 handerbars 生成的html，直接打印即可 。当然关于 pdf 页眉，页脚，缩放比例等的设置可以参考下 gitbub 里的说明。&lt;/p&gt;
-&lt;p&gt;以上两个npm包结合起来生成 pdf 再好用不过.&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;PS：在生成打印 pdf 时，需用到分页打印。可用 page-break-before和page-break-after，这是CSS的一个属性哦,&lt;/strong&gt;&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;&amp;lt;div style=&amp;#34;page-break-before:always&amp;#34;&amp;gt;&amp;lt;/div&amp;gt;&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;&lt;img loading="lazy" src='nodepdf/nodePDF3.png' alt="nodepdf/nodePDF3.png"&gt;&lt;/p&gt;</description></item></channel></rss>
+&lt;p&gt;正确代码可以将 id 和 name 加上时间戳编程唯一的 id / name。&lt;/p&gt;</description></item></channel></rss>
