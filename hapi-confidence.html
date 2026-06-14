@@ -1,1408 +1,196 @@
-<!DOCTYPE html>
-<html  lang="en">
-<head>
-    <meta charset="utf-8" />
-
-<meta name="generator" content="Hexo 3.9.0" />
-
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-
-<title>hapi-confidence - SmileJoe</title>
-
-
-    <meta name="description" content="一个非常有用环境的插件">
-<meta name="keywords" content="前端,全栈,node,plugin,hapi">
-<meta property="og:type" content="article">
-<meta property="og:title" content="hapi-confidence">
-<meta property="og:url" content="http://smilejoe.cn/hapi-confidence.html">
-<meta property="og:site_name" content="SmileJoe">
-<meta property="og:description" content="一个非常有用环境的插件">
-<meta property="og:locale" content="en">
-<meta property="og:image" content="http://smilejoe.cn/images/covers/confidence_logo.png">
-<meta property="og:updated_time" content="2019-09-16T10:03:09.507Z">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="hapi-confidence">
-<meta name="twitter:description" content="一个非常有用环境的插件">
-<meta name="twitter:image" content="http://smilejoe.cn/images/covers/confidence_logo.png">
-
-
-
-
-
-
-
-<link rel="icon" href="/images/avatar.jpeg">
-
-
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.7.2/css/bulma.css">
-<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.4.1/css/all.css">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Ubuntu:400,600|Source+Code+Pro">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@9.12.0/styles/atom-one-light.css">
-
-
-    
-    
-    
-    <style>body>.footer,body>.navbar,body>.section{opacity:0}</style>
-    
-
-    
-    
-    
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@1.6.8/dist/css/lightgallery.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justifiedGallery@3.7.0/dist/css/justifiedGallery.min.css">
-    
-
-    
-    
-
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/outdatedbrowser@1.1.5/outdatedbrowser/outdatedbrowser.min.css">
-
-
-    
-    
-    
-    
-
-<link rel="stylesheet" href="/css/back-to-top.css">
-
-
-    
-    
-
-    
-    
-    
-    
-
-    
-    
-<link rel="stylesheet" href="/css/progressbar.css">
-<script src="https://cdn.jsdelivr.net/npm/pace-js@1.0.2/pace.min.js"></script>
-
-    
-    
-    
-        <script async="" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
-    
-
-    
-
-
-<link rel="stylesheet" href="/css/style.css">
-</head>
-<body class="is-3-column">
-    <nav class="navbar navbar-main">
-    <div class="container">
-        <div class="navbar-brand is-flex-center">
-            <a class="navbar-item navbar-logo" href="/">
-            
-                <img src="/images/avatar.jpeg" alt="hapi-confidence" height="28">
-            
-            </a>
-        </div>
-        <div class="navbar-menu">
-            
-            <div class="navbar-start">
-                
-                <a class="navbar-item"
-                href="/">Home</a>
-                
-                <a class="navbar-item"
-                href="/archives">Archives</a>
-                
-                <a class="navbar-item"
-                href="/categories">Categories</a>
-                
-                <a class="navbar-item"
-                href="/tags">Tags</a>
-                
-                <a class="navbar-item"
-                href="/about">About</a>
-                
-            </div>
-            
-            <div class="navbar-end">
-                
-                    
-                    
-                    <a class="navbar-item" target="_blank" title="Download on GitHub" href="https://github.com/JoeSmile">
-                        
-                        <i class="fab fa-github"></i>
-                        
-                    </a>
-                    
-                
-                
-                
-                <a class="navbar-item search" title="Search" href="javascript:;">
-                    <i class="fas fa-search"></i>
-                </a>
-                
-            </div>
-        </div>
-    </div>
-</nav>
-    
-    <section class="section">
-        <div class="container">
-            <div class="columns">
-                <div class="column is-8-tablet is-8-desktop is-6-widescreen has-order-2 column-main"><div class="card">
-    
-    <div class="card-image">
-        <span  class="image is-7by1">
-            <img class="thumbnail" src="/images/covers/confidence_logo.png" alt="hapi-confidence">
-        </span>
-    </div>
-    
-    <div class="card-content article ">
-        
-        <div class="level article-meta is-size-7 is-uppercase is-mobile is-overflow-x-auto">
-            <div class="level-left">
-                <time class="level-item has-text-grey" datetime="2019-09-16T02:46:51.000Z">2019-09-16</time>
-                
-                
-                <span class="level-item has-text-grey">
-                    
-                    
-                    5 minutes read (About 685 words)
-                </span>
-                
-                
-                <span class="level-item has-text-grey" id="busuanzi_container_page_pv">
-                    <i class="far fa-eye"></i>
-                    <span id="busuanzi_value_page_pv">0</span> visits
-                </span>
-                
-            </div>
-        </div>
-        
-        <h1 class="title is-size-3 is-size-4-mobile has-text-weight-normal">
-            
-                hapi-confidence
-            
-        </h1>
-        <div class="content">
-            <blockquote>
-<p>记录一个confidence插件，简单明了地根据不同环境变量更换配置。平时我们写 config 或者 settings 文件要仔细区分环境，参数值比较混乱，难管理。有了 confidence 插件之后，再也不用担心环境参数混乱的问题了。</p>
-</blockquote>
-<p><strong>confidence 地址</strong><br><a href="https://github.com/hapipal/confidence" target="_blank" rel="noopener">https://github.com/hapipal/confidence</a></p>
-<h2 id="基本结构"><a href="#基本结构" class="headerlink" title="基本结构"></a>基本结构</h2><p>结构很清晰，根据不同的环境变量获取不同的值。还能做一些范围控制。使用起来很简单，只要配置<strong>标准参数</strong>(如:$filter)即可。</p>
-<pre><code class="js">{
-    &quot;key1&quot;: &quot;abc&quot;,
-    &quot;key2&quot;: {
-        &quot;$filter&quot;: &quot;env&quot;,
-        &quot;production&quot;: {
-            &quot;deeper&quot;: {
-                &quot;$value&quot;: &quot;value&quot;
-            }
-        },
-        &quot;$default&quot;: {
-            &quot;$filter&quot;: &quot;platform&quot;,
-            &quot;android&quot;: 0,
-            &quot;ios&quot;: 1,
-            &quot;$default&quot;: 2
-        }
-    },
-    &quot;ab&quot;: {
-        &quot;$filter&quot;: &quot;random.a&quot;,
-        &quot;$range&quot;: [
-            { &quot;limit&quot;: 10, &quot;value&quot;: 4 },
-            { &quot;limit&quot;: 20, &quot;value&quot;: 5 }
-        ],
-        &quot;$default&quot;: 6
-    },
-    &quot;$meta&quot;: {
-        &quot;description&quot;: &quot;example file&quot;
-    }
-}</code></pre>
-<h2 id="API"><a href="#API" class="headerlink" title="API"></a>API</h2><p>我们在使用confidence之前，先介绍下它的API</p>
-<blockquote>
-<p>new Store(document) 创建一个配置容器<br>store.load(document) 载入一份配置文件<br>store.get() 根据参数生成配置   </p>
-</blockquote>
-<pre><code class="js">// 一个简单的demo
-const { Store } = require(&#39;confidence&#39;)
-const { env } = process
-// 从环境变量取值
-const criteria = {
-  env: env.NODE_ENV
-}
-const settings = {
-  platform: {
-    $filter: &#39;env&#39;,
-    development: &#39;this is DEV environment&#39;,
-    qa: &#39;this is in QA environment&#39;,
-    production: &#39;this is in PRO environment&#39;,
-    $default: &#39;this is in LOCAL environment&#39;
-  }
-}
-// 创建配置容器
-const store = new Store(settings)
-
-module.exports = {
-  settings: store.get(&#39;/&#39;, criteria) //根据环境变量生成对应的配置
-}
-// settings 结构为 { platform: &#39;this is in DEV environment&#39; }</code></pre>
-<h2 id="标准参数"><a href="#标准参数" class="headerlink" title="标准参数"></a>标准参数</h2><h3 id="filter"><a href="#filter" class="headerlink" title="filter"></a>filter</h3><blockquote>
-<p>规则：变量名只能用 字母 和 ‘_’。根据匹配环境变量的值，来选择用什么变量。（看个栗子瞬间就懂）</p>
-</blockquote>
-<pre><code class="js">platform: {
-  $filter: &#39;NODE_ENV&#39;,
-  development: &#39;this is DEV environment&#39;,
-  qa: &#39;this is in QA environment&#39;,
-  production: &#39;this is in PRO environment&#39;,
-  $default: &#39;this is in LOCAL environment&#39;
-}</code></pre>
-<blockquote>
-<p>在终端执行export，会把所有的环境变量打印出来，观察下 NODE_ENV 的值，本人本地的 NODE_ENV 值是 dev， 故直接用default值。<br>最终结果： { platform: ‘this is in LOCAL environment’ }</p>
-</blockquote>
-<p>PS: 把$filter 当作 switch-case 语句就好理解了。</p>
-<h3 id="range"><a href="#range" class="headerlink" title="range"></a>range</h3><p>先上个栗子</p>
-<pre><code class="js">key: {
-    &quot;$filter&quot;: &quot;random&quot;,
-    &quot;$range&quot;: [
-        { &quot;limit&quot;: 10, &quot;value&quot;: 4 },
-        { &quot;limit&quot;: 20, &quot;value&quot;: 5 }
-    ],
-    &quot;$default&quot;: 6
-}</code></pre>
-<blockquote>
-<p>当 random 小于等于10，key的值为4；<br>当 random 大于10并且小于等于20， key的值为5；<br>当 random 大于20，key的值为6</p>
-</blockquote>
-<h3 id="Shared-values（-base）"><a href="#Shared-values（-base）" class="headerlink" title="Shared values（$base）"></a>Shared values（$base）</h3><p>用栗子说明问题</p>
-<pre><code class="js">{
-  &quot;$filter&quot;: &quot;env&quot;,
-  &quot;$base&quot;: {
-      &quot;logLocation&quot;: &quot;/logs&quot;
-  },
-  &quot;production&quot;:  {
-      &quot;logLevel&quot;: &quot;error&quot;
-  },
-  &quot;qa&quot;:  {
-      &quot;logLevel&quot;: &quot;info&quot;,
-      &quot;logLocation&quot;: &quot;/qa/logs&quot;
-  },
-  &quot;staging&quot;:  {
-      &quot;logLevel&quot;: &quot;debug&quot;
-  }
-}</code></pre>
-<p>当写了$base，以下的条件中如果不覆写 logLocation, 就默认有一个”logLocation”: “/logs” 属性。<br>所以当 env 是 production 时，结果为   </p>
-<pre><code class="js">{ 
-  &quot;logLevel&quot;: &quot;error&quot;,
-  &quot;logLocation&quot;: &quot;/logs&quot;
-}</code></pre>
-<p>当 env 是 qa 时，结果为</p>
-<pre><code class="js">{
-  &quot;logLevel&quot;: &quot;info&quot;,
-  &quot;logLocation&quot;: &quot;/qa/logs&quot;
-}</code></pre>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>使用confidence设置配置文件快捷方便，清晰明了，node型框架(hapi or koa)统统适用。</p>
-<h3 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h3><p>这里有一个 hapi 小型脚手架，包含confidence插件， Glue插件等，练手好demo！<br>demo传送门 <a href="https://github.com/JoeSmile/hapi-confidence" target="_blank" rel="noopener">https://github.com/JoeSmile/hapi-confidence</a></p>
-
-        </div>
-        
-        
-        
-    </div>
-</div>
-
-
-
-
-
-<div class="card card-transparent">
-    <div class="level post-navigation is-flex-wrap is-mobile">
-        
-        
-        <div class="level-end">
-            <a class="level level-item has-link-grey  article-nav-next" href="/angular-relevant-links.html">
-                <span class="level-item">angular_relevant_links</span>
-                <i class="level-item fas fa-chevron-right"></i>
-            </a>
-        </div>
-        
-    </div>
-</div>
-
-
-
-</div>
-                
-
-
-
-
-<div class="column is-4-tablet is-4-desktop is-3-widescreen  has-order-1 column-left ">
-    
-        
-<div class="card widget">
-    <div class="card-content">
-        <nav class="level">
-            <div class="level-item has-text-centered" style="flex-shrink: 1">
-                <div>
-                    
-                        <img class="image is-128x128 has-mb-6" src="/images/avatar.jpeg" alt="Joe">
-                    
-                    
-                    <p class="is-size-4 is-block">
-                        Joe
-                    </p>
-                    
-                    
-                    <p class="is-size-6 is-block">
-                        full stack developer
-                    </p>
-                    
-                    
-                    <p class="is-size-6 is-flex is-flex-center has-text-grey">
-                        <i class="fas fa-map-marker-alt has-mr-7"></i>
-                        <span>Earth</span>
-                    </p>
-                    
-                </div>
-            </div>
-        </nav>
-        <nav class="level is-mobile">
-            <div class="level-item has-text-centered is-marginless">
-                <div>
-                    <p class="heading">
-                        Posts
-                    </p>
-                    <p class="title has-text-weight-normal">
-                        17
-                    </p>
-                </div>
-            </div>
-            <div class="level-item has-text-centered is-marginless">
-                <div>
-                    <p class="heading">
-                        Categories
-                    </p>
-                    <p class="title has-text-weight-normal">
-                        5
-                    </p>
-                </div>
-            </div>
-            <div class="level-item has-text-centered is-marginless">
-                <div>
-                    <p class="heading">
-                        Tags
-                    </p>
-                    <p class="title has-text-weight-normal">
-                        24
-                    </p>
-                </div>
-            </div>
-        </nav>
-        <div class="level">
-            <a class="level-item button is-link is-rounded" href="https://github.com/JoeSmile" target="_blank">
-                Follow</a>
-        </div>
-        
-        
-        <div class="level is-mobile">
-            
-            <a class="level-item button is-white is-marginless" target="_blank"
-                title="Github" href="https://github.com/JoeSmile">
-                
-                <i class="fab fa-github"></i>
-                
-            </a>
-            
-        </div>
-        
-    </div>
-</div>
-    
-        
-    
-        
-<div class="card widget">
-    <div class="card-content">
-        <div class="menu">
-            <h3 class="menu-label">
-                Categories
-            </h3>
-            <ul class="menu-list">
-            <li>
-        <a class="level is-marginless" href="/categories/css/">
-            <span class="level-start">
-                <span class="level-item">css</span>
-            </span>
-            <span class="level-end">
-                <span class="level-item tag">1</span>
-            </span>
-        </a></li><li>
-        <a class="level is-marginless" href="/categories/javascript/">
-            <span class="level-start">
-                <span class="level-item">javascript</span>
-            </span>
-            <span class="level-end">
-                <span class="level-item tag">3</span>
-            </span>
-        </a></li><li>
-        <a class="level is-marginless" href="/categories/mongodb/">
-            <span class="level-start">
-                <span class="level-item">mongodb</span>
-            </span>
-            <span class="level-end">
-                <span class="level-item tag">1</span>
-            </span>
-        </a></li><li>
-        <a class="level is-marginless" href="/categories/node/">
-            <span class="level-start">
-                <span class="level-item">node</span>
-            </span>
-            <span class="level-end">
-                <span class="level-item tag">6</span>
-            </span>
-        </a></li><li>
-        <a class="level is-marginless" href="/categories/tools/">
-            <span class="level-start">
-                <span class="level-item">tools</span>
-            </span>
-            <span class="level-end">
-                <span class="level-item tag">2</span>
-            </span>
-        </a></li>
-            </ul>
-        </div>
-    </div>
-</div>
-    
-        
-<div class="card widget">
-    <div class="card-content">
-        <h3 class="menu-label">
-            Tag Cloud
-        </h3>
-        <a href="/tags/aem/" style="font-size: 10px;">aem</a> <a href="/tags/css/" style="font-size: 10px;">css</a> <a href="/tags/css-hack/" style="font-size: 10px;">css-hack</a> <a href="/tags/es6/" style="font-size: 10px;">es6+</a> <a href="/tags/helmet/" style="font-size: 10px;">helmet</a> <a href="/tags/javascript/" style="font-size: 10px;">javascript</a> <a href="/tags/jwt/" style="font-size: 10px;">jwt</a> <a href="/tags/key/" style="font-size: 10px;">key</a> <a href="/tags/koa/" style="font-size: 16px;">koa</a> <a href="/tags/middleware/" style="font-size: 14px;">middleware</a> <a href="/tags/mongodb/" style="font-size: 10px;">mongodb</a> <a href="/tags/noSql/" style="font-size: 10px;">noSql</a> <a href="/tags/node/" style="font-size: 18px;">node</a> <a href="/tags/npm/" style="font-size: 20px;">npm</a> <a href="/tags/pdf/" style="font-size: 10px;">pdf</a> <a href="/tags/router/" style="font-size: 10px;">router</a> <a href="/tags/sharing/" style="font-size: 12px;">sharing</a> <a href="/tags/solutions/" style="font-size: 18px;">solutions</a> <a href="/tags/test/" style="font-size: 10px;">test</a> <a href="/tags/vue/" style="font-size: 10px;">vue</a> <a href="/tags/windows/" style="font-size: 10px;">windows</a> <a href="/tags/富文本编辑器/" style="font-size: 10px;">富文本编辑器</a> <a href="/tags/编辑器/" style="font-size: 10px;">编辑器</a> <a href="/tags/面试题/" style="font-size: 10px;">面试题</a>
-    </div>
-</div>
-
-    
-    
-        <div class="column-right-shadow is-hidden-widescreen ">
-        
-            
-<div class="card widget">
-    <div class="card-content">
-        <h3 class="menu-label">
-            Recent
-        </h3>
-        
-        <article class="media">
-            
-            <a href="/hapi-confidence.html" class="media-left">
-                <p class="image is-64x64">
-                    <img class="thumbnail" src="/images/covers/confidence_logo.png" alt="hapi-confidence">
-                </p>
-            </a>
-            
-            <div class="media-content">
-                <div class="content">
-                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2019-09-16T02:46:51.000Z">2019-09-16</time></div>
-                    <a href="/hapi-confidence.html" class="title has-link-black-ter is-size-6 has-text-weight-normal">hapi-confidence</a>
-                    <p class="is-size-7 is-uppercase">
-                        
-                    </p>
-                </div>
-            </div>
-        </article>
-        
-        <article class="media">
-            
-            <a href="/angular-relevant-links.html" class="media-left">
-                <p class="image is-64x64">
-                    <img class="thumbnail" src="/images/thumbnail.svg" alt="angular_relevant_links">
-                </p>
-            </a>
-            
-            <div class="media-content">
-                <div class="content">
-                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2019-09-10T02:10:33.000Z">2019-09-10</time></div>
-                    <a href="/angular-relevant-links.html" class="title has-link-black-ter is-size-6 has-text-weight-normal">angular_relevant_links</a>
-                    <p class="is-size-7 is-uppercase">
-                        
-                    </p>
-                </div>
-            </div>
-        </article>
-        
-        <article class="media">
-            
-            <a href="/useful-tools-website.html" class="media-left">
-                <p class="image is-64x64">
-                    <img class="thumbnail" src="/images/js.png" alt="参考资料">
-                </p>
-            </a>
-            
-            <div class="media-content">
-                <div class="content">
-                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2019-08-22T09:00:00.000Z">2019-08-22</time></div>
-                    <a href="/useful-tools-website.html" class="title has-link-black-ter is-size-6 has-text-weight-normal">参考资料</a>
-                    <p class="is-size-7 is-uppercase">
-                        <a class="has-link-grey -link" href="/categories/tools/">tools</a>
-                    </p>
-                </div>
-            </div>
-        </article>
-        
-        <article class="media">
-            
-            <a href="/aem-test.html" class="media-left">
-                <p class="image is-64x64">
-                    <img class="thumbnail" src="/images/covers/aem-test-cover.jpeg" alt="aem-test">
-                </p>
-            </a>
-            
-            <div class="media-content">
-                <div class="content">
-                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2019-08-21T11:16:40.000Z">2019-08-21</time></div>
-                    <a href="/aem-test.html" class="title has-link-black-ter is-size-6 has-text-weight-normal">aem-test</a>
-                    <p class="is-size-7 is-uppercase">
-                        
-                    </p>
-                </div>
-            </div>
-        </article>
-        
-        <article class="media">
-            
-            <a href="/koa-helmet.html" class="media-left">
-                <p class="image is-64x64">
-                    <img class="thumbnail" src="/images/covers/helmet-cover.jpg" alt="koa-helmet">
-                </p>
-            </a>
-            
-            <div class="media-content">
-                <div class="content">
-                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2019-08-21T06:45:45.000Z">2019-08-21</time></div>
-                    <a href="/koa-helmet.html" class="title has-link-black-ter is-size-6 has-text-weight-normal">koa-helmet</a>
-                    <p class="is-size-7 is-uppercase">
-                        <a class="has-link-grey -link" href="/categories/node/">node</a>
-                    </p>
-                </div>
-            </div>
-        </article>
-        
-    </div>
-</div>
-
-        
-            <div class="card widget">
-    <div class="card-content">
-        <div class="menu">
-        <h3 class="menu-label">
-            Archives
-        </h3>
-        <ul class="menu-list">
-        
-        <li>
-            <a class="level is-marginless" href="/archives/2019/09/">
-                <span class="level-start">
-                    <span class="level-item">September 2019</span>
-                </span>
-                <span class="level-end">
-                    <span class="level-item tag">2</span>
-                </span>
-            </a>
-        </li>
-        
-        <li>
-            <a class="level is-marginless" href="/archives/2019/08/">
-                <span class="level-start">
-                    <span class="level-item">August 2019</span>
-                </span>
-                <span class="level-end">
-                    <span class="level-item tag">8</span>
-                </span>
-            </a>
-        </li>
-        
-        <li>
-            <a class="level is-marginless" href="/archives/2019/03/">
-                <span class="level-start">
-                    <span class="level-item">March 2019</span>
-                </span>
-                <span class="level-end">
-                    <span class="level-item tag">2</span>
-                </span>
-            </a>
-        </li>
-        
-        <li>
-            <a class="level is-marginless" href="/archives/2019/01/">
-                <span class="level-start">
-                    <span class="level-item">January 2019</span>
-                </span>
-                <span class="level-end">
-                    <span class="level-item tag">2</span>
-                </span>
-            </a>
-        </li>
-        
-        <li>
-            <a class="level is-marginless" href="/archives/2018/11/">
-                <span class="level-start">
-                    <span class="level-item">November 2018</span>
-                </span>
-                <span class="level-end">
-                    <span class="level-item tag">3</span>
-                </span>
-            </a>
-        </li>
-        
-        </ul>
-        </div>
-    </div>
-</div>
-        
-            <div class="card widget">
-    <div class="card-content">
-        <div class="menu">
-            <h3 class="menu-label">
-                Tags
-            </h3>
-            <div class="field is-grouped is-grouped-multiline">
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/aem/">
-                        <span class="tag">aem</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/css/">
-                        <span class="tag">css</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/css-hack/">
-                        <span class="tag">css-hack</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/es6/">
-                        <span class="tag">es6+</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/helmet/">
-                        <span class="tag">helmet</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/javascript/">
-                        <span class="tag">javascript</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/jwt/">
-                        <span class="tag">jwt</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/key/">
-                        <span class="tag">key</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/koa/">
-                        <span class="tag">koa</span>
-                        <span class="tag is-grey">5</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/middleware/">
-                        <span class="tag">middleware</span>
-                        <span class="tag is-grey">4</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/mongodb/">
-                        <span class="tag">mongodb</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/noSql/">
-                        <span class="tag">noSql</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/node/">
-                        <span class="tag">node</span>
-                        <span class="tag is-grey">6</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/npm/">
-                        <span class="tag">npm</span>
-                        <span class="tag is-grey">7</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/pdf/">
-                        <span class="tag">pdf</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/router/">
-                        <span class="tag">router</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/sharing/">
-                        <span class="tag">sharing</span>
-                        <span class="tag is-grey">2</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/solutions/">
-                        <span class="tag">solutions</span>
-                        <span class="tag is-grey">6</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/test/">
-                        <span class="tag">test</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/vue/">
-                        <span class="tag">vue</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/windows/">
-                        <span class="tag">windows</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/富文本编辑器/">
-                        <span class="tag">富文本编辑器</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/编辑器/">
-                        <span class="tag">编辑器</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/面试题/">
-                        <span class="tag">面试题</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-            </div>
-        </div>
-    </div>
-</div>
-        
-        </div>
-    
-</div>
-
-                
-
-
-
-
-<div class="column is-4-tablet is-4-desktop is-3-widescreen is-hidden-touch is-hidden-desktop-only has-order-3 column-right ">
-    
-        
-<div class="card widget">
-    <div class="card-content">
-        <h3 class="menu-label">
-            Recent
-        </h3>
-        
-        <article class="media">
-            
-            <a href="/hapi-confidence.html" class="media-left">
-                <p class="image is-64x64">
-                    <img class="thumbnail" src="/images/covers/confidence_logo.png" alt="hapi-confidence">
-                </p>
-            </a>
-            
-            <div class="media-content">
-                <div class="content">
-                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2019-09-16T02:46:51.000Z">2019-09-16</time></div>
-                    <a href="/hapi-confidence.html" class="title has-link-black-ter is-size-6 has-text-weight-normal">hapi-confidence</a>
-                    <p class="is-size-7 is-uppercase">
-                        
-                    </p>
-                </div>
-            </div>
-        </article>
-        
-        <article class="media">
-            
-            <a href="/angular-relevant-links.html" class="media-left">
-                <p class="image is-64x64">
-                    <img class="thumbnail" src="/images/thumbnail.svg" alt="angular_relevant_links">
-                </p>
-            </a>
-            
-            <div class="media-content">
-                <div class="content">
-                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2019-09-10T02:10:33.000Z">2019-09-10</time></div>
-                    <a href="/angular-relevant-links.html" class="title has-link-black-ter is-size-6 has-text-weight-normal">angular_relevant_links</a>
-                    <p class="is-size-7 is-uppercase">
-                        
-                    </p>
-                </div>
-            </div>
-        </article>
-        
-        <article class="media">
-            
-            <a href="/useful-tools-website.html" class="media-left">
-                <p class="image is-64x64">
-                    <img class="thumbnail" src="/images/js.png" alt="参考资料">
-                </p>
-            </a>
-            
-            <div class="media-content">
-                <div class="content">
-                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2019-08-22T09:00:00.000Z">2019-08-22</time></div>
-                    <a href="/useful-tools-website.html" class="title has-link-black-ter is-size-6 has-text-weight-normal">参考资料</a>
-                    <p class="is-size-7 is-uppercase">
-                        <a class="has-link-grey -link" href="/categories/tools/">tools</a>
-                    </p>
-                </div>
-            </div>
-        </article>
-        
-        <article class="media">
-            
-            <a href="/aem-test.html" class="media-left">
-                <p class="image is-64x64">
-                    <img class="thumbnail" src="/images/covers/aem-test-cover.jpeg" alt="aem-test">
-                </p>
-            </a>
-            
-            <div class="media-content">
-                <div class="content">
-                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2019-08-21T11:16:40.000Z">2019-08-21</time></div>
-                    <a href="/aem-test.html" class="title has-link-black-ter is-size-6 has-text-weight-normal">aem-test</a>
-                    <p class="is-size-7 is-uppercase">
-                        
-                    </p>
-                </div>
-            </div>
-        </article>
-        
-        <article class="media">
-            
-            <a href="/koa-helmet.html" class="media-left">
-                <p class="image is-64x64">
-                    <img class="thumbnail" src="/images/covers/helmet-cover.jpg" alt="koa-helmet">
-                </p>
-            </a>
-            
-            <div class="media-content">
-                <div class="content">
-                    <div><time class="has-text-grey is-size-7 is-uppercase" datetime="2019-08-21T06:45:45.000Z">2019-08-21</time></div>
-                    <a href="/koa-helmet.html" class="title has-link-black-ter is-size-6 has-text-weight-normal">koa-helmet</a>
-                    <p class="is-size-7 is-uppercase">
-                        <a class="has-link-grey -link" href="/categories/node/">node</a>
-                    </p>
-                </div>
-            </div>
-        </article>
-        
-    </div>
-</div>
-
-    
-        <div class="card widget">
-    <div class="card-content">
-        <div class="menu">
-        <h3 class="menu-label">
-            Archives
-        </h3>
-        <ul class="menu-list">
-        
-        <li>
-            <a class="level is-marginless" href="/archives/2019/09/">
-                <span class="level-start">
-                    <span class="level-item">September 2019</span>
-                </span>
-                <span class="level-end">
-                    <span class="level-item tag">2</span>
-                </span>
-            </a>
-        </li>
-        
-        <li>
-            <a class="level is-marginless" href="/archives/2019/08/">
-                <span class="level-start">
-                    <span class="level-item">August 2019</span>
-                </span>
-                <span class="level-end">
-                    <span class="level-item tag">8</span>
-                </span>
-            </a>
-        </li>
-        
-        <li>
-            <a class="level is-marginless" href="/archives/2019/03/">
-                <span class="level-start">
-                    <span class="level-item">March 2019</span>
-                </span>
-                <span class="level-end">
-                    <span class="level-item tag">2</span>
-                </span>
-            </a>
-        </li>
-        
-        <li>
-            <a class="level is-marginless" href="/archives/2019/01/">
-                <span class="level-start">
-                    <span class="level-item">January 2019</span>
-                </span>
-                <span class="level-end">
-                    <span class="level-item tag">2</span>
-                </span>
-            </a>
-        </li>
-        
-        <li>
-            <a class="level is-marginless" href="/archives/2018/11/">
-                <span class="level-start">
-                    <span class="level-item">November 2018</span>
-                </span>
-                <span class="level-end">
-                    <span class="level-item tag">3</span>
-                </span>
-            </a>
-        </li>
-        
-        </ul>
-        </div>
-    </div>
-</div>
-    
-        <div class="card widget">
-    <div class="card-content">
-        <div class="menu">
-            <h3 class="menu-label">
-                Tags
-            </h3>
-            <div class="field is-grouped is-grouped-multiline">
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/aem/">
-                        <span class="tag">aem</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/css/">
-                        <span class="tag">css</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/css-hack/">
-                        <span class="tag">css-hack</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/es6/">
-                        <span class="tag">es6+</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/helmet/">
-                        <span class="tag">helmet</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/javascript/">
-                        <span class="tag">javascript</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/jwt/">
-                        <span class="tag">jwt</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/key/">
-                        <span class="tag">key</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/koa/">
-                        <span class="tag">koa</span>
-                        <span class="tag is-grey">5</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/middleware/">
-                        <span class="tag">middleware</span>
-                        <span class="tag is-grey">4</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/mongodb/">
-                        <span class="tag">mongodb</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/noSql/">
-                        <span class="tag">noSql</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/node/">
-                        <span class="tag">node</span>
-                        <span class="tag is-grey">6</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/npm/">
-                        <span class="tag">npm</span>
-                        <span class="tag is-grey">7</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/pdf/">
-                        <span class="tag">pdf</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/router/">
-                        <span class="tag">router</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/sharing/">
-                        <span class="tag">sharing</span>
-                        <span class="tag is-grey">2</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/solutions/">
-                        <span class="tag">solutions</span>
-                        <span class="tag is-grey">6</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/test/">
-                        <span class="tag">test</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/vue/">
-                        <span class="tag">vue</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/windows/">
-                        <span class="tag">windows</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/富文本编辑器/">
-                        <span class="tag">富文本编辑器</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/编辑器/">
-                        <span class="tag">编辑器</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-                <div class="control">
-                    <a class="tags has-addons" href="/tags/面试题/">
-                        <span class="tag">面试题</span>
-                        <span class="tag is-grey">1</span>
-                    </a>
-                </div>
-                
-            </div>
-        </div>
-    </div>
-</div>
-    
-    
-</div>
-
-            </div>
-        </div>
-    </section>
-    <footer class="footer">
-    <div class="container">
-        <div class="level">
-            <div class="level-start has-text-centered-mobile">
-                <a class="footer-logo is-block has-mb-6" href="/">
-                
-                    <img src="/images/avatar.jpeg" alt="hapi-confidence" height="28">
-                
-                </a>
-                <p class="is-size-7">
-                
-                <br>
-                <span id="busuanzi_container_site_uv"> 来访 <span id="busuanzi_value_site_uv"></span>人</span>
-                <span id="busuanzi_container_site_pv">, 总访问 <span id="busuanzi_value_site_pv"></span>次</span>
-                
-
-                </p>
-            </div>
-            <div class="level-end">
-            
-                <div class="field has-addons is-flex-center-mobile has-mt-5-mobile is-flex-wrap is-flex-middle">
-                
-                
-                <p class="control">
-                    <a class="button is-white is-large" target="_blank" title="Creative Commons" href="https://creativecommons.org/">
-                        
-                        <i class="fab fa-creative-commons"></i>
-                        
-                    </a>
-                </p>
-                
-                <p class="control">
-                    <a class="button is-white is-large" target="_blank" title="Attribution 4.0 International" href="https://creativecommons.org/licenses/by/4.0/">
-                        
-                        <i class="fab fa-creative-commons-by"></i>
-                        
-                    </a>
-                </p>
-                
-                <p class="control">
-                    <a class="button is-white is-large" target="_blank" title="Download on GitHub" href="https://github.com/ppoffice/hexo-theme-icarus">
-                        
-                        <i class="fab fa-github"></i>
-                        
-                    </a>
-                </p>
-                
-                </div>
-            
-            </div>
-        </div>
-    </div>
-</footer>
-
-    <script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/moment@2.22.2/min/moment-with-locales.min.js"></script>
-<script>moment.locale("en");</script>
-
-<script>
-var IcarusThemeSettings = {
-    article: {
-        highlight: {
-            clipboard: true,
-            fold: 'unfolded'
-        }
-    }
-};
-</script>
-
-
-    <script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.4/dist/clipboard.min.js" defer></script>
-
-
-
-    
-    
-    
-    <script src="/js/animation.js"></script>
-    
-
-    
-    
-    
-    <script src="https://cdn.jsdelivr.net/npm/lightgallery@1.6.8/dist/js/lightgallery.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/justifiedGallery@3.7.0/dist/js/jquery.justifiedGallery.min.js" defer></script>
-    <script src="/js/gallery.js" defer></script>
-    
-
-    
-    
-
-<div id="outdated">
-    <h6>Your browser is out-of-date!</h6>
-    <p>Update your browser to view this website correctly. <a id="btnUpdateBrowser" href="http://outdatedbrowser.com/">Update
-            my browser now </a></p>
-    <p class="last"><a href="#" id="btnCloseUpdateBrowser" title="Close">&times;</a></p>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/outdatedbrowser@1.1.5/outdatedbrowser/outdatedbrowser.min.js" defer></script>
-<script>
-    document.addEventListener("DOMContentLoaded", function () {
-        outdatedBrowser({
-            bgColor: '#f25648',
-            color: '#ffffff',
-            lowerThan: 'flex'
-        });
-    });
-</script>
-
-
-    
-    
-<script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.5/unpacked/MathJax.js?config=TeX-MML-AM_CHTML" defer></script>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    MathJax.Hub.Config({
-        'HTML-CSS': {
-            matchFontHeight: false
-        },
-        SVG: {
-            matchFontHeight: false
-        },
-        CommonHTML: {
-            matchFontHeight: false
-        },
-        tex2jax: {
-            inlineMath: [
-                ['$','$'],
-                ['\\(','\\)']
-            ]
-        }
-    });
-});
-</script>
-
-    
-    
-
-<a id="back-to-top" title="Back to Top" href="javascript:;">
-    <i class="fas fa-chevron-up"></i>
-</a>
-<script src="/js/back-to-top.js" defer></script>
-
-
-    
-    
-
-    
-    
-    
-    
-
-    
-    
-    
-    
-    
-
-    
-
-
-<script src="/js/main.js" defer></script>
-
-    
-    <div class="searchbox ins-search">
-    <div class="searchbox-container ins-search-container">
-        <div class="searchbox-input-wrapper">
-            <input type="text" class="searchbox-input ins-search-input" placeholder="Type something..." />
-            <span class="searchbox-close ins-close ins-selectable"><i class="fa fa-times-circle"></i></span>
-        </div>
-        <div class="searchbox-result-wrapper ins-section-wrapper">
-            <div class="ins-section-container"></div>
-        </div>
-    </div>
-</div>
-<script>
-    (function (window) {
-        var INSIGHT_CONFIG = {
-            TRANSLATION: {
-                POSTS: 'Posts',
-                PAGES: 'Pages',
-                CATEGORIES: 'Categories',
-                TAGS: 'Tags',
-                UNTITLED: '(Untitled)',
-            },
-            CONTENT_URL: '/content.json',
-        };
-        window.INSIGHT_CONFIG = INSIGHT_CONFIG;
-    })(window);
-</script>
-<script src="/js/insight.js" defer></script>
-<link rel="stylesheet" href="/css/search.css">
-<link rel="stylesheet" href="/css/insight.css">
-    
-</body>
-</html>
+<!doctype html><html itemscope itemtype=http://schema.org/WebPage lang=zh-CN><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=2"><meta name=robots content="noodp"><title>Hapi-Confidence - SmileJoe</title><meta name=author content="Joe"><meta name=description content=" 记录一个confidence插件，简单明了地根据不同环境变量更换配置。平时我们写 config 或者 settings 文件要仔细区分环境，参数值比较混乱，难管理。有了 confidence 插件之后，再也不用担心环境参数混乱的问题了。
+"><meta itemprop=name content="hapi-confidence"><meta itemprop=description content="记录一个confidence插件，简单明了地根据不同环境变量更换配置。平时我们写 config 或者 settings 文件要仔细区分环境，参数值比较混乱，难管理。有了 confidence 插件之后，再也不用担心环境参数混乱的问题了。"><meta itemprop=datePublished content="2019-09-16T10:46:51+08:00"><meta itemprop=dateModified content="2019-09-16T10:46:51+08:00"><meta itemprop=wordCount content="983"><meta property="og:url" content="https://joesmile.github.io/hapi-confidence.html"><meta property="og:site_name" content="SmileJoe"><meta property="og:title" content="hapi-confidence"><meta property="og:description" content="记录一个confidence插件，简单明了地根据不同环境变量更换配置。平时我们写 config 或者 settings 文件要仔细区分环境，参数值比较混乱，难管理。有了 confidence 插件之后，再也不用担心环境参数混乱的问题了。"><meta property="og:locale" content="zh_CN"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2019-09-16T10:46:51+08:00"><meta property="article:modified_time" content="2019-09-16T10:46:51+08:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="hapi-confidence"><meta name=twitter:description content="记录一个confidence插件，简单明了地根据不同环境变量更换配置。平时我们写 config 或者 settings 文件要仔细区分环境，参数值比较混乱，难管理。有了 confidence 插件之后，再也不用担心环境参数混乱的问题了。"><meta name=application-name content="FixIt"><meta name=apple-mobile-web-app-title content="FixIt"><meta name=theme-color data-light=#f8f8f8 data-dark=#252627 content="#f8f8f8"><meta name=msapplication-TileColor content="#da532c"><link rel="shortcut icon" type=image/x-icon href=/favicon.ico><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=mask-icon href=/safari-pinned-tab.svg color=#5bbad5><link rel=canonical type=text/html href=https://joesmile.github.io/hapi-confidence.html title="hapi-confidence - SmileJoe"><link rel=prev type=text/html href=https://joesmile.github.io/angular-relevant-links.html title=angular_relevant_links><link rel=next type=text/html href=https://joesmile.github.io/hugo-migration.html title="欢迎使用 Hugo"><link rel=stylesheet href=/css/config.min.css><link rel=stylesheet href=/css/style.min.css><link rel=preload href=/lib/fontawesome-free/all.min.css as=style onload='this.removeAttribute("onload"),this.rel="stylesheet"'><noscript><link rel=stylesheet href=/lib/fontawesome-free/all.min.css></noscript><link rel=preload href=/lib/animate/animate.min.css as=style onload='this.removeAttribute("onload"),this.rel="stylesheet"'><noscript><link rel=stylesheet href=/lib/animate/animate.min.css></noscript><script type=application/ld+json>{"@context":"http://schema.org","@type":"BlogPosting","headline":"hapi-confidence","inLanguage":"zh-CN","mainEntityOfPage":{"@type":"WebPage","@id":"https:\/\/joesmile.github.io\/hapi-confidence.html"},"genre":"posts","wordcount":983,"url":"https:\/\/joesmile.github.io\/hapi-confidence.html","datePublished":"2019-09-16T10:46:51+08:00","dateModified":"2019-09-16T10:46:51+08:00","publisher":{"@type":"Organization","name":""},"author":{"@type":"Person","name":"Joe"},"description":""}</script><script src=/js/head/color-scheme.min.js></script></head><body data-instant-intensity=viewport data-header-desktop=sticky data-header-mobile=auto><div class=wrapper data-page-style=normal><header class="desktop animate__faster" id=header-desktop><div class=header-wrapper><div class=header-title><a href=/ title=SmileJoe><img class=logo src=/images/avatar.jpeg alt=SmileJoe height=32 width=32><span class=header-title-text>SmileJoe</span></a><span class=header-subtitle></span></div><nav><ul class=menu><li class=menu-item><a class=menu-link href=/archives/><i class="fa-solid fa-archive fa-sm" aria-hidden=true></i> 归档</a></li><li class=menu-item><a class=menu-link href=/categories/><i class="fa-solid fa-folder-tree fa-sm" aria-hidden=true></i> 分类</a></li><li class=menu-item><a class=menu-link href=/tags/><i class="fa-solid fa-tags fa-sm" aria-hidden=true></i> 标签</a></li><li class=menu-item><a class=menu-link href=/about/><i class="fa-solid fa-user fa-sm" aria-hidden=true></i> 关于</a></li><li class="menu-item delimiter"></li><li class="menu-item search" id=search-desktop><input type=text placeholder=搜索文章标题或内容…… id=search-input-desktop>
+<a href=javascript:void(0); class="search-button search-toggle" id=search-toggle-desktop title=搜索><i class="fa-solid fa-search" aria-hidden=true></i>
+</a><a href=javascript:void(0); class="search-button search-clear" id=search-clear-desktop title=清空><i class="fa-solid fa-times-circle" aria-hidden=true></i>
+</a><span class="search-button search-loading" id=search-loading-desktop><i class="fa-solid fa-spinner fa-spin" aria-hidden=true></i></span></li><li class="menu-item theme-switch" role=button aria-label=切换主题 title=切换主题><i class="fa-solid fa-adjust" aria-hidden=true></i></li></ul></nav></div></header><header class="mobile animate__faster" id=header-mobile><div class=header-container><div class=header-wrapper><div class=header-title><a href=/ title=SmileJoe><img class=logo src=/images/avatar.jpeg alt=SmileJoe height=26 width=26><span class=header-title-text>SmileJoe</span></a><span class=header-subtitle></span></div><div class=theme-switch role=button aria-label=切换主题><i class="fa-solid fa-adjust" aria-hidden=true></i></div><div class=menu-toggle id=menu-toggle-mobile role=button aria-labelledby=menu-mobile><span></span><span></span><span></span></div></div><nav><ul class=menu id=menu-mobile><li class=search-wrapper><div class="search mobile" id=search-mobile><input type=text placeholder=搜索文章标题或内容…… id=search-input-mobile>
+<a href=javascript:void(0); class="search-button search-toggle" id=search-toggle-mobile title=搜索><i class="fa-solid fa-search" aria-hidden=true></i>
+</a><a href=javascript:void(0); class="search-button search-clear" id=search-clear-mobile title=清空><i class="fa-solid fa-times-circle" aria-hidden=true></i>
+</a><span class="search-button search-loading" id=search-loading-mobile><i class="fa-solid fa-spinner fa-spin" aria-hidden=true></i></span></div><a href=javascript:void(0); class=search-cancel id=search-cancel-mobile>取消</a></li><li class=menu-item><a class=menu-link href=/archives/><i class="fa-solid fa-archive fa-sm" aria-hidden=true></i> 归档</a></li><li class=menu-item><a class=menu-link href=/categories/><i class="fa-solid fa-folder-tree fa-sm" aria-hidden=true></i> 分类</a></li><li class=menu-item><a class=menu-link href=/tags/><i class="fa-solid fa-tags fa-sm" aria-hidden=true></i> 标签</a></li><li class=menu-item><a class=menu-link href=/about/><i class="fa-solid fa-user fa-sm" aria-hidden=true></i> 关于</a></li><li class="menu-item menu-system"></li></ul></nav></div></header><div class="search-dropdown desktop"><div id=search-dropdown-desktop></div></div><div class="search-dropdown mobile"><div id=search-dropdown-mobile></div></div><main class=fi-container><aside class="aside-collection animate__animated animate__fadeIn animate__faster" aria-label=合集></aside><article class="page single"><div class=header><h1 class="single-title animate__animated animate__flipInX"><span>Hapi-Confidence</span></h1></div><div class=post-meta><div class=post-meta-line><span class=post-author><a href=https://github.com/JoeSmile title=作者 target=_blank rel="external nofollow noopener noreferrer author" class=author><i class="fa-solid fa-user-circle" aria-hidden=true></i>
+Joe</a></span></div><div class=post-meta-line><span title="发布于 2019-09-16 10:46:51"><i class="fa-solid fa-calendar-days me-1" aria-hidden=true></i><time datetime=2019-09-16>2019-09-16</time></span>&nbsp;<span title="983 字"><i class="fa-solid fa-pencil-alt me-1" aria-hidden=true></i>约 1000 字</span>&nbsp;<span><i class="fa-regular fa-clock me-1" aria-hidden=true></i>预计阅读 2 分钟</span>&nbsp;</div></div><div class=featured-image><img loading=eager src=/images/covers/confidence_logo.png sizes="(max-width: 680px) 100vw, (max-width: 960px) 80vw, (max-width: 1440px) 56vw, 800px" alt=/images/covers/confidence_logo.png></div><div class="details toc" id=toc-static data-kept=false><div class="details-summary toc-title"><span>目录</span>
+<span><i class="details-icon fa-solid fa-angle-right" aria-hidden=true></i></span></div><div class="details-content toc-content" id=toc-content-static><nav id=TableOfContents><ul><li><a href=#基本结构>基本结构</a></li><li><a href=#api>API</a></li><li><a href=#标准参数>标准参数</a><ul><li><a href=#filter>filter</a></li><li><a href=#range>range</a></li><li><a href=#shared-valuesbase>Shared values（$base）</a></li></ul></li><li><a href=#总结>总结</a><ul><li><a href=#最后>最后</a></li></ul></li></ul></nav></div></div><div class=content id=content><blockquote><p>记录一个confidence插件，简单明了地根据不同环境变量更换配置。平时我们写 config 或者 settings 文件要仔细区分环境，参数值比较混乱，难管理。有了 confidence 插件之后，再也不用担心环境参数混乱的问题了。</p></blockquote><p><strong>confidence 地址</strong><br><a href=https://github.com/hapipal/confidence target=_blank rel="external nofollow noopener noreferrer">https://github.com/hapipal/confidence</a></p><h2 class=heading-element id=基本结构><span>基本结构</span>
+<a href=#%e5%9f%ba%e6%9c%ac%e7%bb%93%e6%9e%84 class=heading-mark><svg class="octicon octicon-link" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m7.775 3.275 1.25-1.25a3.5 3.5.0 114.95 4.95l-2.5 2.5a3.5 3.5.0 01-4.95.0.751.751.0 01.018-1.042.751.751.0 011.042-.018 1.998 1.998.0 002.83.0l2.5-2.5a2.002 2.002.0 00-2.83-2.83l-1.25 1.25a.751.751.0 01-1.042-.018.751.751.0 01-.018-1.042zm-4.69 9.64a1.998 1.998.0 002.83.0l1.25-1.25a.751.751.0 011.042.018.751.751.0 01.018 1.042l-1.25 1.25a3.5 3.5.0 11-4.95-4.95l2.5-2.5a3.5 3.5.0 014.95.0.751.751.0 01-.018 1.042.751.751.0 01-1.042.018 1.998 1.998.0 00-2.83.0l-2.5 2.5a1.998 1.998.0 000 2.83z"/></svg></a></h2><p>结构很清晰，根据不同的环境变量获取不同的值。还能做一些范围控制。使用起来很简单，只要配置<strong>标准参数</strong>(如:$filter)即可。</p><div class="code-block highlight" data-mode=classic data-copyable=true><div class=chroma><div class="code-header language-js"><span class=code-title><i class="arrow fa-solid fa-chevron-down" aria-hidden=true></i></span><span class=ellipses-btn aria-label="Show more options" role=button><i class="fa-solid fa-ellipsis-h" aria-hidden=true></i></span><span class="action-btn line-nos-btn" aria-label=切换行号 role=button title=切换行号 data-ct-tooltip><i class="fa-solid fa-list-ol" aria-hidden=true></i></span><span class="action-btn line-wrap-btn" aria-label=切换自动换行 role=button title=切换自动换行 data-ct-tooltip><i class="fa-solid fa-right-left" aria-hidden=true></i></span><span class="action-btn copy-btn" aria-label=复制到剪贴板 role=button title=复制到剪贴板 data-copied-text=已复制 data-ct-tooltip><i class="fa-regular fa-clone" aria-hidden=true></i></span></div><div class=code-wrapper data-max=10 data-line-digit=2 style=--fi-max-shown-lines:10;--fi-line-digit:2;--fi-line-start:1><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-js data-lang=js><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=s2>&#34;key1&#34;</span><span class=o>:</span> <span class=s2>&#34;abc&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>    <span class=s2>&#34;key2&#34;</span><span class=o>:</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=s2>&#34;$filter&#34;</span><span class=o>:</span> <span class=s2>&#34;env&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>        <span class=s2>&#34;production&#34;</span><span class=o>:</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>            <span class=s2>&#34;deeper&#34;</span><span class=o>:</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>                <span class=s2>&#34;$value&#34;</span><span class=o>:</span> <span class=s2>&#34;value&#34;</span>
+</span></span><span class=line><span class=cl>            <span class=p>}</span>
+</span></span><span class=line><span class=cl>        <span class=p>},</span>
+</span></span><span class=line><span class=cl>        <span class=s2>&#34;$default&#34;</span><span class=o>:</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>            <span class=s2>&#34;$filter&#34;</span><span class=o>:</span> <span class=s2>&#34;platform&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>            <span class=s2>&#34;android&#34;</span><span class=o>:</span> <span class=mi>0</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>            <span class=s2>&#34;ios&#34;</span><span class=o>:</span> <span class=mi>1</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>            <span class=s2>&#34;$default&#34;</span><span class=o>:</span> <span class=mi>2</span>
+</span></span><span class=line><span class=cl>        <span class=p>}</span>
+</span></span><span class=line><span class=cl>    <span class=p>},</span>
+</span></span><span class=line><span class=cl>    <span class=s2>&#34;ab&#34;</span><span class=o>:</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=s2>&#34;$filter&#34;</span><span class=o>:</span> <span class=s2>&#34;random.a&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>        <span class=s2>&#34;$range&#34;</span><span class=o>:</span> <span class=p>[</span>
+</span></span><span class=line><span class=cl>            <span class=p>{</span> <span class=s2>&#34;limit&#34;</span><span class=o>:</span> <span class=mi>10</span><span class=p>,</span> <span class=s2>&#34;value&#34;</span><span class=o>:</span> <span class=mi>4</span> <span class=p>},</span>
+</span></span><span class=line><span class=cl>            <span class=p>{</span> <span class=s2>&#34;limit&#34;</span><span class=o>:</span> <span class=mi>20</span><span class=p>,</span> <span class=s2>&#34;value&#34;</span><span class=o>:</span> <span class=mi>5</span> <span class=p>}</span>
+</span></span><span class=line><span class=cl>        <span class=p>],</span>
+</span></span><span class=line><span class=cl>        <span class=s2>&#34;$default&#34;</span><span class=o>:</span> <span class=mi>6</span>
+</span></span><span class=line><span class=cl>    <span class=p>},</span>
+</span></span><span class=line><span class=cl>    <span class=s2>&#34;$meta&#34;</span><span class=o>:</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=s2>&#34;description&#34;</span><span class=o>:</span> <span class=s2>&#34;example file&#34;</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=p>}</span></span></span></code></pre></td></tr></table></div><div class=code-expand-btn aria-label=展开或折叠代码块 role=button><i class="fa-solid fa-angles-down" aria-hidden=true></i></div></div></div><h2 class=heading-element id=api><span>API</span>
+<a href=#api class=heading-mark><svg class="octicon octicon-link" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m7.775 3.275 1.25-1.25a3.5 3.5.0 114.95 4.95l-2.5 2.5a3.5 3.5.0 01-4.95.0.751.751.0 01.018-1.042.751.751.0 011.042-.018 1.998 1.998.0 002.83.0l2.5-2.5a2.002 2.002.0 00-2.83-2.83l-1.25 1.25a.751.751.0 01-1.042-.018.751.751.0 01-.018-1.042zm-4.69 9.64a1.998 1.998.0 002.83.0l1.25-1.25a.751.751.0 011.042.018.751.751.0 01.018 1.042l-1.25 1.25a3.5 3.5.0 11-4.95-4.95l2.5-2.5a3.5 3.5.0 014.95.0.751.751.0 01-.018 1.042.751.751.0 01-1.042.018 1.998 1.998.0 00-2.83.0l-2.5 2.5a1.998 1.998.0 000 2.83z"/></svg></a></h2><p>我们在使用confidence之前，先介绍下它的API</p><blockquote><p>new Store(document) 创建一个配置容器<br>store.load(document) 载入一份配置文件<br>store.get() 根据参数生成配置</p></blockquote><div class="code-block highlight" data-mode=classic data-copyable=true><div class=chroma><div class="code-header language-js"><span class=code-title><i class="arrow fa-solid fa-chevron-down" aria-hidden=true></i></span><span class=ellipses-btn aria-label="Show more options" role=button><i class="fa-solid fa-ellipsis-h" aria-hidden=true></i></span><span class="action-btn line-nos-btn" aria-label=切换行号 role=button title=切换行号 data-ct-tooltip><i class="fa-solid fa-list-ol" aria-hidden=true></i></span><span class="action-btn line-wrap-btn" aria-label=切换自动换行 role=button title=切换自动换行 data-ct-tooltip><i class="fa-solid fa-right-left" aria-hidden=true></i></span><span class="action-btn copy-btn" aria-label=复制到剪贴板 role=button title=复制到剪贴板 data-copied-text=已复制 data-ct-tooltip><i class="fa-regular fa-clone" aria-hidden=true></i></span></div><div class=code-wrapper data-max=10 data-line-digit=2 style=--fi-max-shown-lines:10;--fi-line-digit:2;--fi-line-start:1><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-js data-lang=js><span class=line><span class=cl><span class=c1>// 一个简单的demo
+</span></span></span><span class=line><span class=cl><span class=kr>const</span> <span class=p>{</span> <span class=nx>Store</span> <span class=p>}</span> <span class=o>=</span> <span class=nx>require</span><span class=p>(</span><span class=s1>&#39;confidence&#39;</span><span class=p>)</span>
+</span></span><span class=line><span class=cl><span class=kr>const</span> <span class=p>{</span> <span class=nx>env</span> <span class=p>}</span> <span class=o>=</span> <span class=nx>process</span>
+</span></span><span class=line><span class=cl><span class=c1>// 从环境变量取值
+</span></span></span><span class=line><span class=cl><span class=kr>const</span> <span class=nx>criteria</span> <span class=o>=</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=nx>env</span><span class=o>:</span> <span class=nx>env</span><span class=p>.</span><span class=nx>NODE_ENV</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=kr>const</span> <span class=nx>settings</span> <span class=o>=</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=nx>platform</span><span class=o>:</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=nx>$filter</span><span class=o>:</span> <span class=s1>&#39;env&#39;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>    <span class=nx>development</span><span class=o>:</span> <span class=s1>&#39;this is DEV environment&#39;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>    <span class=nx>qa</span><span class=o>:</span> <span class=s1>&#39;this is in QA environment&#39;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>    <span class=nx>production</span><span class=o>:</span> <span class=s1>&#39;this is in PRO environment&#39;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>    <span class=nx>$default</span><span class=o>:</span> <span class=s1>&#39;this is in LOCAL environment&#39;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=c1>// 创建配置容器
+</span></span></span><span class=line><span class=cl><span class=kr>const</span> <span class=nx>store</span> <span class=o>=</span> <span class=k>new</span> <span class=nx>Store</span><span class=p>(</span><span class=nx>settings</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nx>module</span><span class=p>.</span><span class=nx>exports</span> <span class=o>=</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=nx>settings</span><span class=o>:</span> <span class=nx>store</span><span class=p>.</span><span class=nx>get</span><span class=p>(</span><span class=s1>&#39;/&#39;</span><span class=p>,</span> <span class=nx>criteria</span><span class=p>)</span> <span class=c1>//根据环境变量生成对应的配置
+</span></span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=c1>// settings 结构为 { platform: &#39;this is in DEV environment&#39; }
+</span></span></span></code></pre></td></tr></table></div><div class=code-expand-btn aria-label=展开或折叠代码块 role=button><i class="fa-solid fa-angles-down" aria-hidden=true></i></div></div></div><h2 class=heading-element id=标准参数><span>标准参数</span>
+<a href=#%e6%a0%87%e5%87%86%e5%8f%82%e6%95%b0 class=heading-mark><svg class="octicon octicon-link" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m7.775 3.275 1.25-1.25a3.5 3.5.0 114.95 4.95l-2.5 2.5a3.5 3.5.0 01-4.95.0.751.751.0 01.018-1.042.751.751.0 011.042-.018 1.998 1.998.0 002.83.0l2.5-2.5a2.002 2.002.0 00-2.83-2.83l-1.25 1.25a.751.751.0 01-1.042-.018.751.751.0 01-.018-1.042zm-4.69 9.64a1.998 1.998.0 002.83.0l1.25-1.25a.751.751.0 011.042.018.751.751.0 01.018 1.042l-1.25 1.25a3.5 3.5.0 11-4.95-4.95l2.5-2.5a3.5 3.5.0 014.95.0.751.751.0 01-.018 1.042.751.751.0 01-1.042.018 1.998 1.998.0 00-2.83.0l-2.5 2.5a1.998 1.998.0 000 2.83z"/></svg></a></h2><h3 class=heading-element id=filter><span>filter</span>
+<a href=#filter class=heading-mark><svg class="octicon octicon-link" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m7.775 3.275 1.25-1.25a3.5 3.5.0 114.95 4.95l-2.5 2.5a3.5 3.5.0 01-4.95.0.751.751.0 01.018-1.042.751.751.0 011.042-.018 1.998 1.998.0 002.83.0l2.5-2.5a2.002 2.002.0 00-2.83-2.83l-1.25 1.25a.751.751.0 01-1.042-.018.751.751.0 01-.018-1.042zm-4.69 9.64a1.998 1.998.0 002.83.0l1.25-1.25a.751.751.0 011.042.018.751.751.0 01.018 1.042l-1.25 1.25a3.5 3.5.0 11-4.95-4.95l2.5-2.5a3.5 3.5.0 014.95.0.751.751.0 01-.018 1.042.751.751.0 01-1.042.018 1.998 1.998.0 00-2.83.0l-2.5 2.5a1.998 1.998.0 000 2.83z"/></svg></a></h3><blockquote><p>规则：变量名只能用 字母 和 &lsquo;_&rsquo;。根据匹配环境变量的值，来选择用什么变量。（看个栗子瞬间就懂）</p></blockquote><div class="code-block highlight" data-mode=classic data-copyable=true><div class=chroma><div class="code-header language-js"><span class=code-title><i class="arrow fa-solid fa-chevron-down" aria-hidden=true></i></span><span class=ellipses-btn aria-label="Show more options" role=button><i class="fa-solid fa-ellipsis-h" aria-hidden=true></i></span><span class="action-btn line-nos-btn" aria-label=切换行号 role=button title=切换行号 data-ct-tooltip><i class="fa-solid fa-list-ol" aria-hidden=true></i></span><span class="action-btn line-wrap-btn" aria-label=切换自动换行 role=button title=切换自动换行 data-ct-tooltip><i class="fa-solid fa-right-left" aria-hidden=true></i></span><span class="action-btn copy-btn" aria-label=复制到剪贴板 role=button title=复制到剪贴板 data-copied-text=已复制 data-ct-tooltip><i class="fa-regular fa-clone" aria-hidden=true></i></span></div><div class=code-wrapper data-max=10 data-line-digit=1 style=--fi-max-shown-lines:10;--fi-line-digit:1;--fi-line-start:1><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-js data-lang=js><span class=line><span class=cl><span class=nx>platform</span><span class=o>:</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=nx>$filter</span><span class=o>:</span> <span class=s1>&#39;NODE_ENV&#39;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>  <span class=nx>development</span><span class=o>:</span> <span class=s1>&#39;this is DEV environment&#39;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>  <span class=nx>qa</span><span class=o>:</span> <span class=s1>&#39;this is in QA environment&#39;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>  <span class=nx>production</span><span class=o>:</span> <span class=s1>&#39;this is in PRO environment&#39;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>  <span class=nx>$default</span><span class=o>:</span> <span class=s1>&#39;this is in LOCAL environment&#39;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span></span></span></code></pre></td></tr></table></div></div></div><blockquote><p>在终端执行export，会把所有的环境变量打印出来，观察下 NODE_ENV 的值，本人本地的 NODE_ENV 值是 dev， 故直接用default值。<br>最终结果： { platform: &rsquo;this is in LOCAL environment&rsquo; }</p></blockquote><p>PS: 把$filter 当作 switch-case 语句就好理解了。</p><h3 class=heading-element id=range><span>range</span>
+<a href=#range class=heading-mark><svg class="octicon octicon-link" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m7.775 3.275 1.25-1.25a3.5 3.5.0 114.95 4.95l-2.5 2.5a3.5 3.5.0 01-4.95.0.751.751.0 01.018-1.042.751.751.0 011.042-.018 1.998 1.998.0 002.83.0l2.5-2.5a2.002 2.002.0 00-2.83-2.83l-1.25 1.25a.751.751.0 01-1.042-.018.751.751.0 01-.018-1.042zm-4.69 9.64a1.998 1.998.0 002.83.0l1.25-1.25a.751.751.0 011.042.018.751.751.0 01.018 1.042l-1.25 1.25a3.5 3.5.0 11-4.95-4.95l2.5-2.5a3.5 3.5.0 014.95.0.751.751.0 01-.018 1.042.751.751.0 01-1.042.018 1.998 1.998.0 00-2.83.0l-2.5 2.5a1.998 1.998.0 000 2.83z"/></svg></a></h3><p>先上个栗子</p><div class="code-block highlight" data-mode=classic data-copyable=true><div class=chroma><div class="code-header language-js"><span class=code-title><i class="arrow fa-solid fa-chevron-down" aria-hidden=true></i></span><span class=ellipses-btn aria-label="Show more options" role=button><i class="fa-solid fa-ellipsis-h" aria-hidden=true></i></span><span class="action-btn line-nos-btn" aria-label=切换行号 role=button title=切换行号 data-ct-tooltip><i class="fa-solid fa-list-ol" aria-hidden=true></i></span><span class="action-btn line-wrap-btn" aria-label=切换自动换行 role=button title=切换自动换行 data-ct-tooltip><i class="fa-solid fa-right-left" aria-hidden=true></i></span><span class="action-btn copy-btn" aria-label=复制到剪贴板 role=button title=复制到剪贴板 data-copied-text=已复制 data-ct-tooltip><i class="fa-regular fa-clone" aria-hidden=true></i></span></div><div class=code-wrapper data-max=10 data-line-digit=1 style=--fi-max-shown-lines:10;--fi-line-digit:1;--fi-line-start:1><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span><span class=lnt>8
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-js data-lang=js><span class=line><span class=cl><span class=nx>key</span><span class=o>:</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=s2>&#34;$filter&#34;</span><span class=o>:</span> <span class=s2>&#34;random&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>    <span class=s2>&#34;$range&#34;</span><span class=o>:</span> <span class=p>[</span>
+</span></span><span class=line><span class=cl>        <span class=p>{</span> <span class=s2>&#34;limit&#34;</span><span class=o>:</span> <span class=mi>10</span><span class=p>,</span> <span class=s2>&#34;value&#34;</span><span class=o>:</span> <span class=mi>4</span> <span class=p>},</span>
+</span></span><span class=line><span class=cl>        <span class=p>{</span> <span class=s2>&#34;limit&#34;</span><span class=o>:</span> <span class=mi>20</span><span class=p>,</span> <span class=s2>&#34;value&#34;</span><span class=o>:</span> <span class=mi>5</span> <span class=p>}</span>
+</span></span><span class=line><span class=cl>    <span class=p>],</span>
+</span></span><span class=line><span class=cl>    <span class=s2>&#34;$default&#34;</span><span class=o>:</span> <span class=mi>6</span>
+</span></span><span class=line><span class=cl><span class=p>}</span></span></span></code></pre></td></tr></table></div></div></div><blockquote><p>当 random 小于等于10，key的值为4；<br>当 random 大于10并且小于等于20， key的值为5；<br>当 random 大于20，key的值为6</p></blockquote><h3 class=heading-element id=shared-valuesbase><span>Shared values（$base）</span>
+<a href=#shared-valuesbase class=heading-mark><svg class="octicon octicon-link" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m7.775 3.275 1.25-1.25a3.5 3.5.0 114.95 4.95l-2.5 2.5a3.5 3.5.0 01-4.95.0.751.751.0 01.018-1.042.751.751.0 011.042-.018 1.998 1.998.0 002.83.0l2.5-2.5a2.002 2.002.0 00-2.83-2.83l-1.25 1.25a.751.751.0 01-1.042-.018.751.751.0 01-.018-1.042zm-4.69 9.64a1.998 1.998.0 002.83.0l1.25-1.25a.751.751.0 011.042.018.751.751.0 01.018 1.042l-1.25 1.25a3.5 3.5.0 11-4.95-4.95l2.5-2.5a3.5 3.5.0 014.95.0.751.751.0 01-.018 1.042.751.751.0 01-1.042.018 1.998 1.998.0 00-2.83.0l-2.5 2.5a1.998 1.998.0 000 2.83z"/></svg></a></h3><p>用栗子说明问题</p><div class="code-block highlight" data-mode=classic data-copyable=true><div class=chroma><div class="code-header language-js"><span class=code-title><i class="arrow fa-solid fa-chevron-down" aria-hidden=true></i></span><span class=ellipses-btn aria-label="Show more options" role=button><i class="fa-solid fa-ellipsis-h" aria-hidden=true></i></span><span class="action-btn line-nos-btn" aria-label=切换行号 role=button title=切换行号 data-ct-tooltip><i class="fa-solid fa-list-ol" aria-hidden=true></i></span><span class="action-btn line-wrap-btn" aria-label=切换自动换行 role=button title=切换自动换行 data-ct-tooltip><i class="fa-solid fa-right-left" aria-hidden=true></i></span><span class="action-btn copy-btn" aria-label=复制到剪贴板 role=button title=复制到剪贴板 data-copied-text=已复制 data-ct-tooltip><i class="fa-regular fa-clone" aria-hidden=true></i></span></div><div class=code-wrapper data-max=10 data-line-digit=2 style=--fi-max-shown-lines:10;--fi-line-digit:2;--fi-line-start:1><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-js data-lang=js><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=s2>&#34;$filter&#34;</span><span class=o>:</span> <span class=s2>&#34;env&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>  <span class=s2>&#34;$base&#34;</span><span class=o>:</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>      <span class=s2>&#34;logLocation&#34;</span><span class=o>:</span> <span class=s2>&#34;/logs&#34;</span>
+</span></span><span class=line><span class=cl>  <span class=p>},</span>
+</span></span><span class=line><span class=cl>  <span class=s2>&#34;production&#34;</span><span class=o>:</span>  <span class=p>{</span>
+</span></span><span class=line><span class=cl>      <span class=s2>&#34;logLevel&#34;</span><span class=o>:</span> <span class=s2>&#34;error&#34;</span>
+</span></span><span class=line><span class=cl>  <span class=p>},</span>
+</span></span><span class=line><span class=cl>  <span class=s2>&#34;qa&#34;</span><span class=o>:</span>  <span class=p>{</span>
+</span></span><span class=line><span class=cl>      <span class=s2>&#34;logLevel&#34;</span><span class=o>:</span> <span class=s2>&#34;info&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>      <span class=s2>&#34;logLocation&#34;</span><span class=o>:</span> <span class=s2>&#34;/qa/logs&#34;</span>
+</span></span><span class=line><span class=cl>  <span class=p>},</span>
+</span></span><span class=line><span class=cl>  <span class=s2>&#34;staging&#34;</span><span class=o>:</span>  <span class=p>{</span>
+</span></span><span class=line><span class=cl>      <span class=s2>&#34;logLevel&#34;</span><span class=o>:</span> <span class=s2>&#34;debug&#34;</span>
+</span></span><span class=line><span class=cl>  <span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=p>}</span></span></span></code></pre></td></tr></table></div><div class=code-expand-btn aria-label=展开或折叠代码块 role=button><i class="fa-solid fa-angles-down" aria-hidden=true></i></div></div></div><p>当写了$base，以下的条件中如果不覆写 logLocation, 就默认有一个"logLocation": &ldquo;/logs&rdquo; 属性。<br>所以当 env 是 production 时，结果为</p><div class="code-block highlight" data-mode=classic data-copyable=true><div class=chroma><div class="code-header language-js"><span class=code-title><i class="arrow fa-solid fa-chevron-down" aria-hidden=true></i></span><span class=ellipses-btn aria-label="Show more options" role=button><i class="fa-solid fa-ellipsis-h" aria-hidden=true></i></span><span class="action-btn line-nos-btn" aria-label=切换行号 role=button title=切换行号 data-ct-tooltip><i class="fa-solid fa-list-ol" aria-hidden=true></i></span><span class="action-btn line-wrap-btn" aria-label=切换自动换行 role=button title=切换自动换行 data-ct-tooltip><i class="fa-solid fa-right-left" aria-hidden=true></i></span><span class="action-btn copy-btn" aria-label=复制到剪贴板 role=button title=复制到剪贴板 data-copied-text=已复制 data-ct-tooltip><i class="fa-regular fa-clone" aria-hidden=true></i></span></div><div class=code-wrapper data-max=10 data-line-digit=1 style=--fi-max-shown-lines:10;--fi-line-digit:1;--fi-line-start:1><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-js data-lang=js><span class=line><span class=cl><span class=p>{</span> 
+</span></span><span class=line><span class=cl>  <span class=s2>&#34;logLevel&#34;</span><span class=o>:</span> <span class=s2>&#34;error&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>  <span class=s2>&#34;logLocation&#34;</span><span class=o>:</span> <span class=s2>&#34;/logs&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span></span></span></code></pre></td></tr></table></div></div></div><p>当 env 是 qa 时，结果为</p><div class="code-block highlight" data-mode=classic data-copyable=true><div class=chroma><div class="code-header language-js"><span class=code-title><i class="arrow fa-solid fa-chevron-down" aria-hidden=true></i></span><span class=ellipses-btn aria-label="Show more options" role=button><i class="fa-solid fa-ellipsis-h" aria-hidden=true></i></span><span class="action-btn line-nos-btn" aria-label=切换行号 role=button title=切换行号 data-ct-tooltip><i class="fa-solid fa-list-ol" aria-hidden=true></i></span><span class="action-btn line-wrap-btn" aria-label=切换自动换行 role=button title=切换自动换行 data-ct-tooltip><i class="fa-solid fa-right-left" aria-hidden=true></i></span><span class="action-btn copy-btn" aria-label=复制到剪贴板 role=button title=复制到剪贴板 data-copied-text=已复制 data-ct-tooltip><i class="fa-regular fa-clone" aria-hidden=true></i></span></div><div class=code-wrapper data-max=10 data-line-digit=1 style=--fi-max-shown-lines:10;--fi-line-digit:1;--fi-line-start:1><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-js data-lang=js><span class=line><span class=cl><span class=p>{</span>
+</span></span><span class=line><span class=cl>  <span class=s2>&#34;logLevel&#34;</span><span class=o>:</span> <span class=s2>&#34;info&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>  <span class=s2>&#34;logLocation&#34;</span><span class=o>:</span> <span class=s2>&#34;/qa/logs&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>}</span></span></span></code></pre></td></tr></table></div></div></div><h2 class=heading-element id=总结><span>总结</span>
+<a href=#%e6%80%bb%e7%bb%93 class=heading-mark><svg class="octicon octicon-link" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m7.775 3.275 1.25-1.25a3.5 3.5.0 114.95 4.95l-2.5 2.5a3.5 3.5.0 01-4.95.0.751.751.0 01.018-1.042.751.751.0 011.042-.018 1.998 1.998.0 002.83.0l2.5-2.5a2.002 2.002.0 00-2.83-2.83l-1.25 1.25a.751.751.0 01-1.042-.018.751.751.0 01-.018-1.042zm-4.69 9.64a1.998 1.998.0 002.83.0l1.25-1.25a.751.751.0 011.042.018.751.751.0 01.018 1.042l-1.25 1.25a3.5 3.5.0 11-4.95-4.95l2.5-2.5a3.5 3.5.0 014.95.0.751.751.0 01-.018 1.042.751.751.0 01-1.042.018 1.998 1.998.0 00-2.83.0l-2.5 2.5a1.998 1.998.0 000 2.83z"/></svg></a></h2><p>使用confidence设置配置文件快捷方便，清晰明了，node型框架(hapi or koa)统统适用。</p><h3 class=heading-element id=最后><span>最后</span>
+<a href=#%e6%9c%80%e5%90%8e class=heading-mark><svg class="octicon octicon-link" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m7.775 3.275 1.25-1.25a3.5 3.5.0 114.95 4.95l-2.5 2.5a3.5 3.5.0 01-4.95.0.751.751.0 01.018-1.042.751.751.0 011.042-.018 1.998 1.998.0 002.83.0l2.5-2.5a2.002 2.002.0 00-2.83-2.83l-1.25 1.25a.751.751.0 01-1.042-.018.751.751.0 01-.018-1.042zm-4.69 9.64a1.998 1.998.0 002.83.0l1.25-1.25a.751.751.0 011.042.018.751.751.0 01.018 1.042l-1.25 1.25a3.5 3.5.0 11-4.95-4.95l2.5-2.5a3.5 3.5.0 014.95.0.751.751.0 01-.018 1.042.751.751.0 01-1.042.018 1.998 1.998.0 00-2.83.0l-2.5 2.5a1.998 1.998.0 000 2.83z"/></svg></a></h3><p>这里有一个 hapi 小型脚手架，包含confidence插件， Glue插件等，练手好demo！<br>demo传送门 <a href=https://github.com/JoeSmile/hapi-confidence target=_blank rel="external nofollow noopener noreferrer">https://github.com/JoeSmile/hapi-confidence</a></p></div><div class=post-footer id=post-footer><div class=post-info><div class=post-info-line><div class=post-info-mod><span title="更新于 2019-09-16 10:46:51">更新于 2019-09-16&nbsp;</span></div><div class=post-info-license><span><a rel="license external nofollow noopener noreferrer" href=https://creativecommons.org/licenses/by-nc-sa/4.0/ target=_blank>CC BY-NC-SA 4.0</a></span></div></div><div class=post-info-line><div class=post-info-md></div><div class=post-info-share><span><a href=javascript:void(0); title="分享到 X" data-sharer=twitter data-url=https://joesmile.github.io/hapi-confidence.html data-title=Hapi-Confidence><i class="fa-brands fa-x-twitter" aria-hidden=true></i></a>
+<a href=javascript:void(0); title="分享到 Facebook" data-sharer=facebook data-url=https://joesmile.github.io/hapi-confidence.html><i class="fa-brands fa-facebook-square" aria-hidden=true></i></a>
+<a href=javascript:void(0); title="分享到 微博" data-sharer=weibo data-url=https://joesmile.github.io/hapi-confidence.html data-title=Hapi-Confidence data-image=/images/covers/confidence_logo.png><i class="fa-brands fa-weibo" aria-hidden=true></i></a></span></div></div></div><div class=post-info-more><section class=post-tags></section><section><span><a href=javascript:void(0); onclick=window.history.back()>返回</a></span>&nbsp;|&nbsp;<span><a href=/>主页</a></span></section></div><div class=post-nav><a href=/angular-relevant-links.html class=post-nav-item rel=prev title=Angular_relevant_links><i class="fa-solid fa-angle-left" aria-hidden=true></i>Angular_relevant_links</a><a href=/hugo-migration.html class=post-nav-item rel=next title="欢迎使用 Hugo">欢迎使用 Hugo<i class="fa-solid fa-angle-right" aria-hidden=true></i></a></div></div></article><aside class=toc id=toc-auto aria-label=目录><h2 class=toc-title>目录&nbsp;<i class="toc-icon fa-solid fa-angle-down" aria-hidden=true></i></h2><div class=toc-content id=toc-content-auto></div></aside><dialog id=toc-dialog aria-labelledby=toc-dialog-title role=dialog><div class=toc><h2 class=toc-title>目录</h2><div class=toc-content id=toc-content-drawer><nav><ul><li><a href=#基本结构>基本结构</a></li><li><a href=#api>API</a></li><li><a href=#标准参数>标准参数</a><ul><li><a href=#filter>filter</a></li><li><a href=#range>range</a></li><li><a href=#shared-valuesbase>Shared values（$base）</a></li></ul></li><li><a href=#总结>总结</a><ul><li><a href=#最后>最后</a></li></ul></li></ul></nav></div></div></dialog></main><footer class=footer><div class=footer-container><div class="footer-line powered">由 <a href=https://gohugo.io/ target=_blank rel="external nofollow noopener noreferrer" title="Hugo 0.163.1"><img class=hugo-icon src=/images/hugo.min.svg alt="Hugo logo"> Hugo</a> 强力驱动 | 主题 - <a href=https://github.com/hugo-fixit/FixIt target=_blank rel=external title="FixIt v0.4.5"><img class=fixit-icon src=/images/fixit.min.svg alt="FixIt logo"> FixIt</a></div><div class="footer-line copyright" itemscope itemtype=http://schema.org/CreativeWork><i class="fa-regular fa-copyright" aria-hidden=true></i>
+<span itemprop=copyrightYear>2026</span><span class=author itemprop=copyrightHolder>
+<a href=https://github.com/JoeSmile target=_blank rel="external nofollow noopener noreferrer">Joe</a></span></div></div></footer></div><div class=widgets><div class=fixed-buttons><div class="fixed-button back-to-top animate__faster d-none" role=button aria-label=回到顶部><i class="fa-solid fa-arrow-up" aria-hidden=true></i></div><div id=toc-drawer-button class="fixed-button toc-drawer-button d-none" role=button aria-label=目录><i class="fa-solid fa-bars" aria-hidden=true></i></div></div><div id=mask></div><noscript><div class=noscript-warning>该网站在启用 JavaScript 的情况下效果最佳。</div></noscript></div><link rel=stylesheet href=/lib/cookieconsent/cookieconsent.min.css><script src=/lib/autocomplete/autocomplete.min.js defer></script><script src=/lib/fuse/fuse.min.js defer></script><script src=/lib/sharer/sharer.min.js async defer></script><script src=/lib/cookieconsent/cookieconsent.min.js defer></script><script src=/lib/cell-tooltip/cell-tooltip.umd.js defer></script><script src=/js/config/b12d61fe931bec71f27061e85dd70d21.js defer></script><script src=/js/theme.min.js defer></script></body></html>

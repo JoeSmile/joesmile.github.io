@@ -1,8 +1,0 @@
-User-agent: * Allow: /
-Allow: /archives/
-Disallow: /vendors/
-Disallow: /categories/
-
-
-Sitemap: http://smilejoe.cn/sitemap.xml
-Sitemap: http://smilejoe.cn/baidusitemap.xml
