@@ -22,7 +22,1507 @@
  end
  Browser --&amp;gt; Pages
  Source --&amp;gt; Actions
- Actions --&amp;gt; Pages&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;旧文章 URL 保持不变（如 &lt;code&gt;/koa-jwt.html&lt;/code&gt;），外链无需修改。&lt;/p&gt;</description></item><item><title>Next.js 15 SEO 核心优化全解（AI 知识库项目实战向）</title><link>https://joesmile.github.io/nextjs-seo.html</link><pubDate>Sat, 30 May 2026 14:00:00 +0800</pubDate><guid>https://joesmile.github.io/nextjs-seo.html</guid><category domain="https://joesmile.github.io/categories/%E5%89%8D%E7%AB%AF--next.js/">前端 &amp; Next.js</category><description>&lt;p&gt;Next.js 是目前&lt;strong&gt;对 SEO 最友好的 React 全栈框架之一&lt;/strong&gt;。它从架构上缓解了传统纯 CSR（客户端渲染）SPA 的索引难题，并提供 Metadata API、Sitemap/Robots 约定式路由等工具链，特别适合&lt;strong&gt;文档站、知识库、AI 产品落地页&lt;/strong&gt;这类需要被搜索到的 App Router 项目。&lt;/p&gt;
+ Actions --&amp;gt; Pages&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;旧文章 URL 保持不变（如 &lt;code&gt;/koa-jwt.html&lt;/code&gt;），外链无需修改。&lt;/p&gt;</description></item><item><title>分场景选型：tRPC / gRPC / Connect-RPC 与流式方案怎么落地</title><link>https://joesmile.github.io/rpc-scenario.html</link><pubDate>Sun, 07 Jun 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/rpc-scenario.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;h1 class="heading-element" id="分场景选型指南trpc--grpc--connect-rpc--流式方案落地决策"&gt;&lt;span&gt;分场景选型指南：tRPC / gRPC / Connect-RPC + 流式方案落地决策&lt;/span&gt;
+ &lt;a href="#%e5%88%86%e5%9c%ba%e6%99%af%e9%80%89%e5%9e%8b%e6%8c%87%e5%8d%97trpc--grpc--connect-rpc--%e6%b5%81%e5%bc%8f%e6%96%b9%e6%a1%88%e8%90%bd%e5%9c%b0%e5%86%b3%e7%ad%96" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h1&gt;&lt;p&gt;先梳理四种 RPC 流模式的能力边界（&lt;strong&gt;务必区分「服务端程序」和「浏览器」&lt;/strong&gt;），再按真实业务拆分「该用什么、为什么、别用什么」，覆盖 &lt;strong&gt;Unary、Server Stream、Client Stream、Bidi&lt;/strong&gt; 四类需求。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;协议层对比与架构图见姊妹篇：&lt;a href="rpc-grpc-trpc.html"&gt;gRPC、tRPC、Connect-RPC 怎么选？&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 class="heading-element" id="前置基础四种流模式--谁在调用"&gt;&lt;span&gt;前置基础：四种流模式 + 谁在调用&lt;/span&gt;
+ &lt;a href="#%e5%89%8d%e7%bd%ae%e5%9f%ba%e7%a1%80%e5%9b%9b%e7%a7%8d%e6%b5%81%e6%a8%a1%e5%bc%8f--%e8%b0%81%e5%9c%a8%e8%b0%83%e7%94%a8" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;同一种流，&lt;strong&gt;内网微服务互调&lt;/strong&gt;和&lt;strong&gt;浏览器调 BFF&lt;/strong&gt; 能力完全不同。下表分两列写清楚：&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;模式&lt;/th&gt;
+					&lt;th&gt;含义&lt;/th&gt;
+					&lt;th&gt;内网 gRPC / Connect 服务端&lt;/th&gt;
+					&lt;th&gt;浏览器（Fetch）&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;Unary&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;一问一答&lt;/td&gt;
+					&lt;td&gt;tRPC / gRPC / Connect ✅&lt;/td&gt;
+					&lt;td&gt;tRPC / Connect ✅&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;Server Stream&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;客户端发 1 次，服务端持续推&lt;/td&gt;
+					&lt;td&gt;gRPC / Connect ✅&lt;/td&gt;
+					&lt;td&gt;tRPC（Subscription / 流式 query）、Connect ✅&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;Client Stream&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;客户端持续发，服务端最后汇总返回&lt;/td&gt;
+					&lt;td&gt;gRPC / Connect ✅&lt;/td&gt;
+					&lt;td&gt;Connect ⚠️ 实验性、浏览器支持不全；更常见是 &lt;strong&gt;分片 HTTP / WebSocket&lt;/strong&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;Bidi&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;两端同时异步收发&lt;/td&gt;
+					&lt;td&gt;gRPC / Connect ✅&lt;/td&gt;
+					&lt;td&gt;Connect / gRPC ❌ &lt;strong&gt;暂无稳定真双工&lt;/strong&gt;；浏览器侧通常用 &lt;strong&gt;WebSocket&lt;/strong&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;strong&gt;记一句&lt;/strong&gt;：LLM「往下吐 token」= Server Stream，三种栈在浏览器里都能做；「浏览器和服务器在同一条连接上同时双向流」在 2026 年仍不能指望 Connect / gRPC 在浏览器里原生搞定。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="一仅需普通接口无流式-nextjs--trpcbff-内网-grpc"&gt;&lt;span&gt;一、仅需普通接口（无流式）→ Next.js + tRPC（BFF）+ 内网 gRPC&lt;/span&gt;
+ &lt;a href="#%e4%b8%80%e4%bb%85%e9%9c%80%e6%99%ae%e9%80%9a%e6%8e%a5%e5%8f%a3%e6%97%a0%e6%b5%81%e5%bc%8f-nextjs--trpcbff-%e5%86%85%e7%bd%91-grpc" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="场景-1后台管理订单查询表单提交权限校验"&gt;&lt;span&gt;场景 1：后台管理、订单查询、表单提交、权限校验&lt;/span&gt;
+ &lt;a href="#%e5%9c%ba%e6%99%af-1%e5%90%8e%e5%8f%b0%e7%ae%a1%e7%90%86%e8%ae%a2%e5%8d%95%e6%9f%a5%e8%af%a2%e8%a1%a8%e5%8d%95%e6%8f%90%e4%ba%a4%e6%9d%83%e9%99%90%e6%a0%a1%e9%aa%8c" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;业务&lt;/strong&gt;：查询 / 增删改；无实时推送、无持续上传；每次交互是独立短请求。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;选型&lt;/strong&gt;：前端 + BFF 用 &lt;strong&gt;tRPC&lt;/strong&gt;，内网微服务用 &lt;strong&gt;gRPC&lt;/strong&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;理由&lt;/strong&gt;：
+&lt;ul&gt;
+&lt;li&gt;全栈 TS，tRPC + Zod 类型共享，Next.js 集成成熟，迭代快；&lt;/li&gt;
+&lt;li&gt;公网 HTTP JSON，Fetch 直连 BFF，无需 protobuf 编译链；&lt;/li&gt;
+&lt;li&gt;内网 gRPC + HTTP/2 二进制，适合多语言微服务。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;不选 Connect / gRPC 直连浏览器&lt;/strong&gt;：简单 CRUD 不必维护 &lt;code&gt;.proto&lt;/code&gt;，JSON 调试更直观。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 class="heading-element" id="场景-2ai-基础对话仅服务端往下推-token"&gt;&lt;span&gt;场景 2：AI 基础对话（仅服务端往下推 token）&lt;/span&gt;
+ &lt;a href="#%e5%9c%ba%e6%99%af-2ai-%e5%9f%ba%e7%a1%80%e5%af%b9%e8%af%9d%e4%bb%85%e6%9c%8d%e5%8a%a1%e7%ab%af%e5%be%80%e4%b8%8b%e6%8e%a8-token" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;业务&lt;/strong&gt;：用户发完整提问，服务端持续返回 token；生成过程中&lt;strong&gt;不在同一条流里&lt;/strong&gt;追加追问或改参数（新意图要新请求）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;选型&lt;/strong&gt;：&lt;strong&gt;tRPC 流式 query / Subscription&lt;/strong&gt;（或 SSE）+ 内网 gRPC。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;理由&lt;/strong&gt;：单向推送即可，tRPC 足够；不必为这类场景引入 Protobuf 工具链。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;关于 Stop（别和 Bidi 混为一谈）&lt;/strong&gt;：
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;停止生成&lt;/strong&gt;不需要 Bidi：前端对 Fetch 调 &lt;code&gt;AbortController.abort()&lt;/code&gt;，BFF 再转发 cancel 到下游即可（见 &lt;a href="abort-controller.html"&gt;AbortController 双发 abort&lt;/a&gt;）。&lt;/li&gt;
+&lt;li&gt;本文说的「局限」是：&lt;strong&gt;不能在同一条 server stream 上继续发追问、改温度&lt;/strong&gt;——那是交互模型问题，不是「没法 Stop」。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="二需要客户端持续上传client-stream-语义-看调用方是谁"&gt;&lt;span&gt;二、需要客户端持续上传（Client Stream 语义）→ 看调用方是谁&lt;/span&gt;
+ &lt;a href="#%e4%ba%8c%e9%9c%80%e8%a6%81%e5%ae%a2%e6%88%b7%e7%ab%af%e6%8c%81%e7%bb%ad%e4%b8%8a%e4%bc%a0client-stream-%e8%af%ad%e4%b9%89-%e7%9c%8b%e8%b0%83%e7%94%a8%e6%96%b9%e6%98%af%e8%b0%81" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="先分清浏览器上传大文件不一定非要-grpc-client-stream"&gt;&lt;span&gt;先分清：浏览器上传大文件，不一定非要 gRPC Client Stream&lt;/span&gt;
+ &lt;a href="#%e5%85%88%e5%88%86%e6%b8%85%e6%b5%8f%e8%a7%88%e5%99%a8%e4%b8%8a%e4%bc%a0%e5%a4%a7%e6%96%87%e4%bb%b6%e4%b8%8d%e4%b8%80%e5%ae%9a%e9%9d%9e%e8%a6%81-grpc-client-stream" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;调用方&lt;/th&gt;
+					&lt;th&gt;常见做法&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;浏览器 → BFF&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;分片 HTTP（多次 POST / multipart）、专用上传接口、tus 等；或 &lt;strong&gt;WebSocket&lt;/strong&gt; 推二进制块&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;服务 → 服务&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;gRPC / Connect &lt;strong&gt;Client Stream&lt;/strong&gt; 很合适&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;tRPC &lt;strong&gt;没有&lt;/strong&gt; gRPC 式的 Client Stream RPC，但大文件可以走 &lt;strong&gt;独立上传路由&lt;/strong&gt;（REST / tRPC mutation 传 chunk 元数据），不等于「只能一次性传整个文件」。&lt;/p&gt;
+&lt;h3 class="heading-element" id="场景-1大文件--知识库批量导入浏览器发起"&gt;&lt;span&gt;场景 1：大文件 / 知识库批量导入（浏览器发起）&lt;/span&gt;
+ &lt;a href="#%e5%9c%ba%e6%99%af-1%e5%a4%a7%e6%96%87%e4%bb%b6--%e7%9f%a5%e8%af%86%e5%ba%93%e6%89%b9%e9%87%8f%e5%af%bc%e5%85%a5%e6%b5%8f%e8%a7%88%e5%99%a8%e5%8f%91%e8%b5%b7" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;业务&lt;/strong&gt;：前端把几十 MB～GB 文档切成分片上传；全部传完后后端解析、向量化，返回导入报告。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;选型（浏览器侧）&lt;/strong&gt;：
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;优先&lt;/strong&gt;：分片 HTTP + BFF 聚合（或对象存储直传 + 回调），实现简单、CDN / 网关友好；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;可选&lt;/strong&gt;：WebSocket 持续推块；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;慎用&lt;/strong&gt;：Connect Client Stream——浏览器 Fetch 对「流式请求体」支持有限（Chromium 半双工实验、Safari / Firefox 更弱）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;选型（纯内网上传，无浏览器）&lt;/strong&gt;：内网 &lt;strong&gt;gRPC / Connect Client Stream&lt;/strong&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;为什么不用 tRPC 单请求塞整个文件&lt;/strong&gt;：一次 JSON / body 过大易超时、占内存；应分片或走对象存储，而不是硬塞进一个 Unary。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 class="heading-element" id="场景-2录音分片上传后统一转写浏览器发起"&gt;&lt;span&gt;场景 2：录音分片上传后统一转写（浏览器发起）&lt;/span&gt;
+ &lt;a href="#%e5%9c%ba%e6%99%af-2%e5%bd%95%e9%9f%b3%e5%88%86%e7%89%87%e4%b8%8a%e4%bc%a0%e5%90%8e%e7%bb%9f%e4%b8%80%e8%bd%ac%e5%86%99%e6%b5%8f%e8%a7%88%e5%99%a8%e5%8f%91%e8%b5%b7" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;业务&lt;/strong&gt;：前端切音频分片持续上传，结束后服务端一次性转写。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;选型&lt;/strong&gt;：与场景 1 相同思路——&lt;strong&gt;分片 HTTP 或 WebSocket&lt;/strong&gt; 到 BFF；内网转写服务可用 gRPC Client Stream。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;若强依赖 Protobuf 类型&lt;/strong&gt;：BFF 用 Connect &lt;strong&gt;服务端客户端&lt;/strong&gt;调下游，浏览器侧仍建议 HTTP 分片，而非假设「Connect 浏览器原生 Client Stream」。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="三长连接双向实时交互--先问是不是浏览器"&gt;&lt;span&gt;三、长连接双向实时交互 → 先问「是不是浏览器」&lt;/span&gt;
+ &lt;a href="#%e4%b8%89%e9%95%bf%e8%bf%9e%e6%8e%a5%e5%8f%8c%e5%90%91%e5%ae%9e%e6%97%b6%e4%ba%a4%e4%ba%92--%e5%85%88%e9%97%ae%e6%98%af%e4%b8%8d%e6%98%af%e6%b5%8f%e8%a7%88%e5%99%a8" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;很多场景被写成「必须 Connect Bidi」，实际要拆两层：&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;层级&lt;/th&gt;
+					&lt;th&gt;更合适的技术&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;浏览器 ↔ BFF&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;WebSocket&lt;/strong&gt;（或 SSE 下行 + HTTP 上行「双通道」）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;BFF ↔ 微服务 / 微服务互调&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;gRPC / Connect &lt;strong&gt;Bidi&lt;/strong&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;tRPC 在 HTTP 下没有 gRPC 式 Bidi，但可用 &lt;strong&gt;WebSocket link&lt;/strong&gt;（mutation 上行 + subscription 下行）做双向交互——语义不同于单条 Bidi RPC，产品体验上可以等价。&lt;/p&gt;
+&lt;h3 class="heading-element" id="场景-1高级-ai-对话生成中要-stop改参数追问"&gt;&lt;span&gt;场景 1：高级 AI 对话（生成中要 Stop、改参数、追问）&lt;/span&gt;
+ &lt;a href="#%e5%9c%ba%e6%99%af-1%e9%ab%98%e7%ba%a7-ai-%e5%af%b9%e8%af%9d%e7%94%9f%e6%88%90%e4%b8%ad%e8%a6%81-stop%e6%94%b9%e5%8f%82%e6%95%b0%e8%bf%bd%e9%97%ae" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;业务&lt;/strong&gt;：生成过程中要能 Stop、改温度、追问；服务端并行推 token、日志、工具调用结果。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;选型（务实组合）&lt;/strong&gt;：
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;下行&lt;/strong&gt;：Server Stream（tRPC 流式 / SSE / Connect Server Stream）；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;上行控制&lt;/strong&gt;：独立 HTTP（cancel API、tRPC mutation）或 &lt;strong&gt;WebSocket&lt;/strong&gt;；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;内网&lt;/strong&gt;：gRPC / Connect 调 LLM 服务。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;不必强上 Bidi 的原因&lt;/strong&gt;：
+&lt;ul&gt;
+&lt;li&gt;浏览器侧 Connect Bidi 并非稳定真双工；&lt;/li&gt;
+&lt;li&gt;MemoryOS 等实践：&lt;strong&gt;AbortController + Cancel API&lt;/strong&gt; 即可 Stop，无需同流双发。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;若坚持「单连接双向」&lt;/strong&gt;：浏览器侧选 &lt;strong&gt;WebSocket&lt;/strong&gt;，不是 Connect Bidi。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 class="heading-element" id="场景-2在线协同文档--白板"&gt;&lt;span&gt;场景 2：在线协同文档 / 白板&lt;/span&gt;
+ &lt;a href="#%e5%9c%ba%e6%99%af-2%e5%9c%a8%e7%ba%bf%e5%8d%8f%e5%90%8c%e6%96%87%e6%a1%a3--%e7%99%bd%e6%9d%bf" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;业务&lt;/strong&gt;：多人同时发光标、编辑操作；服务端广播所有人状态。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;选型&lt;/strong&gt;：&lt;strong&gt;WebSocket&lt;/strong&gt;（行业主流）+ 内网可用 gRPC 做持久化 / 鉴权服务。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;不用 Connect Bidi 直连浏览器&lt;/strong&gt;：Fetch 做不到稳定双向；Connect Bidi 适合 &lt;strong&gt;服务间&lt;/strong&gt; 同步层，不是浏览器首选。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 class="heading-element" id="场景-3实时语音--翻译字幕"&gt;&lt;span&gt;场景 3：实时语音 + 翻译字幕&lt;/span&gt;
+ &lt;a href="#%e5%9c%ba%e6%99%af-3%e5%ae%9e%e6%97%b6%e8%af%ad%e9%9f%b3--%e7%bf%bb%e8%af%91%e5%ad%97%e5%b9%95" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;业务&lt;/strong&gt;：持续上传麦克风音频；同时收对方音频和字幕；中途改语种、静音。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;选型&lt;/strong&gt;：&lt;strong&gt;WebSocket&lt;/strong&gt; 或 &lt;strong&gt;WebRTC&lt;/strong&gt;（音视频常走 WebRTC）；内网推理链可用 gRPC Stream。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SSE + 单独上传&lt;/strong&gt;：两条连接、时序难对齐——这是真问题；但解法通常是 &lt;strong&gt;一条 WebSocket / WebRTC&lt;/strong&gt;，而非 Connect Bidi from browser。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 class="heading-element" id="场景-4联机小游戏"&gt;&lt;span&gt;场景 4：联机小游戏&lt;/span&gt;
+ &lt;a href="#%e5%9c%ba%e6%99%af-4%e8%81%94%e6%9c%ba%e5%b0%8f%e6%b8%b8%e6%88%8f" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;业务&lt;/strong&gt;：高频上行操作 + 服务端广播状态。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;选型&lt;/strong&gt;：&lt;strong&gt;WebSocket&lt;/strong&gt;（或 WebRTC / 专用 UDP）；内网房间服务可用 &lt;strong&gt;gRPC Bidi&lt;/strong&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;关于「比 WebSocket JSON 省带宽」&lt;/strong&gt;：WebSocket 也可发二进制；游戏更关注协议设计和 tick，不宜笼统说 gRPC 一定优于 WebSocket。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 class="heading-element" id="场景-5web-ssh--容器终端"&gt;&lt;span&gt;场景 5：Web SSH / 容器终端&lt;/span&gt;
+ &lt;a href="#%e5%9c%ba%e6%99%af-5web-ssh--%e5%ae%b9%e5%99%a8%e7%bb%88%e7%ab%af" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;业务&lt;/strong&gt;：键盘输入与终端输出实时双向。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;选型&lt;/strong&gt;：&lt;strong&gt;WebSocket&lt;/strong&gt;（xterm.js + 终端网关是常见模式）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Connect Bidi&lt;/strong&gt;：适合 &lt;strong&gt;网关 ↔ 容器&lt;/strong&gt; 的内网段，不适合作为浏览器第一选择。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="四内网微服务互调无浏览器-纯-grpc"&gt;&lt;span&gt;四、内网微服务互调（无浏览器）→ 纯 gRPC&lt;/span&gt;
+ &lt;a href="#%e5%9b%9b%e5%86%85%e7%bd%91%e5%be%ae%e6%9c%8d%e5%8a%a1%e4%ba%92%e8%b0%83%e6%97%a0%e6%b5%8f%e8%a7%88%e5%99%a8-%e7%ba%af-grpc" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="场景支付订单计费llm-推理集群互调"&gt;&lt;span&gt;场景：支付、订单、计费、LLM 推理集群互调&lt;/span&gt;
+ &lt;a href="#%e5%9c%ba%e6%99%af%e6%94%af%e4%bb%98%e8%ae%a2%e5%8d%95%e8%ae%a1%e8%b4%b9llm-%e6%8e%a8%e7%90%86%e9%9b%86%e7%be%a4%e4%ba%92%e8%b0%83" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;业务&lt;/strong&gt;：仅机房内多语言服务互调；高 QPS、要低延迟。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;选型&lt;/strong&gt;：&lt;strong&gt;纯 gRPC&lt;/strong&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;理由&lt;/strong&gt;：HTTP/2 + Protobuf 二进制；四流齐全；生态（负载均衡、拦截器、服务网格）成熟。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;不选 Connect 的原因&lt;/strong&gt;：内网无浏览器诉求时，Connect 的浏览器友好层是额外复杂度；需要时可由 &lt;strong&gt;connect-go 多协议&lt;/strong&gt; 渐进引入，而非默认全换 Connect。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="极简选型速查表"&gt;&lt;span&gt;极简选型速查表&lt;/span&gt;
+ &lt;a href="#%e6%9e%81%e7%ae%80%e9%80%89%e5%9e%8b%e9%80%9f%e6%9f%a5%e8%a1%a8" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;业务特征&lt;/th&gt;
+					&lt;th&gt;推荐组合&lt;/th&gt;
+					&lt;th&gt;常见误区&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;Next.js 全 TS、CRUD / 基础 AI 流式（只往下推）&lt;/td&gt;
+					&lt;td&gt;tRPC BFF + 内网 gRPC&lt;/td&gt;
+					&lt;td&gt;把「Stop」误判为必须 Bidi（AbortController 即可）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;浏览器大文件 / 分片上传&lt;/td&gt;
+					&lt;td&gt;分片 HTTP、对象存储直传、WebSocket&lt;/td&gt;
+					&lt;td&gt;以为 Connect 浏览器已成熟支持 Client Stream&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;浏览器长连接双向（协同、终端、游戏、语音信令）&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;WebSocket&lt;/strong&gt;（± WebRTC）；内网段可用 gRPC Bidi&lt;/td&gt;
+					&lt;td&gt;在浏览器上选 Connect / gRPC Bidi&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;仅内网服务互调、要完整四流&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;纯 gRPC&lt;/strong&gt;（或 connect-go 多协议）&lt;/td&gt;
+					&lt;td&gt;为了「统一」强行让浏览器说 gRPC&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;统一 &lt;code&gt;.proto&lt;/code&gt;、浏览器 Fetch + server stream、内网要四流&lt;/td&gt;
+					&lt;td&gt;Connect 网关 + 内网 gRPC 二进制&lt;/td&gt;
+					&lt;td&gt;以为「一套协议」= 浏览器也能 Bidi&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="参考"&gt;&lt;span&gt;参考&lt;/span&gt;
+ &lt;a href="#%e5%8f%82%e8%80%83" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="本站姊妹篇"&gt;&lt;span&gt;本站姊妹篇&lt;/span&gt;
+ &lt;a href="#%e6%9c%ac%e7%ab%99%e5%a7%8a%e5%a6%b9%e7%af%87" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://joesmile.github.io/rpc-grpc-trpc.html"&gt;gRPC、tRPC、Connect-RPC 怎么选？&lt;/a&gt; — 对比表、架构 1 / 2、浏览器流式能力矩阵&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://joesmile.github.io/sse-vs-websocket.html"&gt;SSE 和 WebSocket 怎么选？&lt;/a&gt; — 浏览器长连接选型；双向交互为何常落 WebSocket&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://joesmile.github.io/abort-controller.html"&gt;AI 聊天 Stop 为什么要「双发 abort」？&lt;/a&gt; — 「高级 AI 对话」不必 Bidi 即可 Stop&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 class="heading-element" id="memoryos-项目技术方案"&gt;&lt;span&gt;MemoryOS 项目技术方案&lt;/span&gt;
+ &lt;a href="#memoryos-%e9%a1%b9%e7%9b%ae%e6%8a%80%e6%9c%af%e6%96%b9%e6%a1%88" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;文档&lt;/th&gt;
+					&lt;th&gt;与本文场景的对应&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;a href="https://github.com/JoeSmile/memoryOS/blob/main/docs/tasks/epics/EP02-streaming-chat.md" target="_blank" rel="external nofollow noopener noreferrer"&gt;EP02 流式对话史诗&lt;/a&gt;&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;场景 2&lt;/strong&gt; 基础流式问答的整体交付顺序&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;a href="https://github.com/JoeSmile/memoryOS/blob/main/openspec/changes/archive/2026-06-03-ep02-chat-sse/design.md" target="_blank" rel="external nofollow noopener noreferrer"&gt;ep02-chat-sse 设计&lt;/a&gt;&lt;/td&gt;
+					&lt;td&gt;SSE Server Stream 选型记录（对照第三节「WebSocket 双向」）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;a href="https://github.com/JoeSmile/memoryOS/blob/main/docs/tech/chat-stream-cancel.md" target="_blank" rel="external nofollow noopener noreferrer"&gt;聊天 Stop / Cancel&lt;/a&gt;&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;场景 1 高级 AI&lt;/strong&gt; — Stop 用双发 abort，非 Connect Bidi&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;a href="https://github.com/JoeSmile/memoryOS/blob/main/docs/tech/chat-rag-stream.md" target="_blank" rel="external nofollow noopener noreferrer"&gt;聊天 RAG 流式与 BFF&lt;/a&gt;&lt;/td&gt;
+					&lt;td&gt;BFF 聚合上游 SSE、结构化 &lt;code&gt;sources&lt;/code&gt; 下行&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;a href="https://github.com/JoeSmile/memoryOS/blob/main/docs/tasks/learning/L02-streaming-langgraph.md" target="_blank" rel="external nofollow noopener noreferrer"&gt;L02 学习笔记&lt;/a&gt;&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;fetch&lt;/code&gt; + ReadableStream、&lt;code&gt;AbortController&lt;/code&gt; 竞态&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;a href="https://github.com/JoeSmile/memoryOS/blob/main/docs/tech/langgraph-chat.md" target="_blank" rel="external nofollow noopener noreferrer"&gt;LangGraph 对话编排&lt;/a&gt;&lt;/td&gt;
+					&lt;td&gt;内网推理层编排（若 BFF 与推理服务拆 gRPC，可对照架构 1 内网段）&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;仓库：&lt;a href="https://github.com/JoeSmile/memoryOS" target="_blank" rel="external nofollow noopener noreferrer"&gt;JoeSmile/memoryOS&lt;/a&gt;&lt;/p&gt;
+&lt;h3 class="heading-element" id="协议官方文档"&gt;&lt;span&gt;协议官方文档&lt;/span&gt;
+ &lt;a href="#%e5%8d%8f%e8%ae%ae%e5%ae%98%e6%96%b9%e6%96%87%e6%a1%a3" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://connectrpc.com/docs/faq" target="_blank" rel="external nofollow noopener noreferrer"&gt;Connect RPC — FAQs&lt;/a&gt; — 浏览器 Client Stream / Bidi 限制&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://trpc.io/docs/server/subscriptions" target="_blank" rel="external nofollow noopener noreferrer"&gt;tRPC — Subscriptions&lt;/a&gt; — HTTP 下单向推送 vs WebSocket 双向组合&lt;/li&gt;
+&lt;/ul&gt;</description></item><item><title>gRPC、tRPC、Connect-RPC 怎么选？对比表与两套全栈架构</title><link>https://joesmile.github.io/rpc-grpc-trpc.html</link><pubDate>Sat, 06 Jun 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/rpc-grpc-trpc.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;p&gt;做全栈或 AI 应用时，&lt;strong&gt;gRPC、tRPC、Connect-RPC&lt;/strong&gt; 名字常一起出现，但浏览器能不能直连、流式能支持几种、存量 gRPC 要不要改——边界很容易混。下文用对比表和两套架构图说明各自适合什么场景，并单独标出 &lt;strong&gt;浏览器 Fetch 的流式能力上限&lt;/strong&gt;。&lt;/p&gt;
+&lt;h1 class="heading-element" id="一grpc--trpc--connect-rpc-核心技术对比表"&gt;&lt;span&gt;一、gRPC / tRPC / Connect-RPC 核心技术对比表&lt;/span&gt;
+ &lt;a href="#%e4%b8%80grpc--trpc--connect-rpc-%e6%a0%b8%e5%bf%83%e6%8a%80%e6%9c%af%e5%af%b9%e6%af%94%e8%a1%a8" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h1&gt;&lt;h2 class="heading-element" id="核心维度横向对比"&gt;&lt;span&gt;核心维度横向对比&lt;/span&gt;
+ &lt;a href="#%e6%a0%b8%e5%bf%83%e7%bb%b4%e5%ba%a6%e6%a8%aa%e5%90%91%e5%af%b9%e6%af%94" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;对比维度&lt;/th&gt;
+					&lt;th&gt;gRPC&lt;/th&gt;
+					&lt;th&gt;tRPC&lt;/th&gt;
+					&lt;th&gt;Connect-RPC&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;核心定位&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;跨语言微服务的二进制 RPC 标准（Google）&lt;/td&gt;
+					&lt;td&gt;TypeScript 全栈端到端 RPC，适合 Next.js / TS 同栈开发&lt;/td&gt;
+					&lt;td&gt;兼容 gRPC 生态、浏览器与后端都能用的现代 RPC（Buf 团队）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;接口定义（IDL）&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;必须用 Protobuf &lt;code&gt;.proto&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;不用 Protobuf，用 TypeScript + Zod / TypeBox 做类型校验&lt;/td&gt;
+					&lt;td&gt;用标准 Protobuf &lt;code&gt;.proto&lt;/code&gt;（与 gRPC 共用同一套 schema）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;传输协议&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;HTTP/2 二进制为主；几乎离不开 HTTP/2&lt;/td&gt;
+					&lt;td&gt;普通 HTTP POST（JSON），走 HTTP/1.1 或 HTTP/2 均可&lt;/td&gt;
+					&lt;td&gt;HTTP/1.1 与 HTTP/2 都支持；wire 上可选 Connect 协议或 gRPC 二进制&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;数据编码&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;Protocol Buffers 二进制&lt;/td&gt;
+					&lt;td&gt;JSON（人类可读，无官方二进制 模式）&lt;/td&gt;
+					&lt;td&gt;Connect-JSON 或 Protobuf 二进制（需在 transport 里配置）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;浏览器兼容性&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;差：浏览器无法直接说原生 gRPC，通常要 grpc-web 或网关转一层&lt;/td&gt;
+					&lt;td&gt;好：Fetch 直接调 BFF，和写 REST 差不多&lt;/td&gt;
+					&lt;td&gt;好：浏览器用 Fetch 直连 &lt;strong&gt;Connect 服务端&lt;/strong&gt;；&lt;strong&gt;不能&lt;/strong&gt;直连原生 gRPC-Go 等服务&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;错误处理&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;17 种固定 gRPC 状态码（0–16），错误多在 HTTP trailer 里&lt;/td&gt;
+					&lt;td&gt;可自定义 TS 错误结构，也兼容 HTTP 状态码&lt;/td&gt;
+					&lt;td&gt;沿用 gRPC 状态码体系，Unary 时 HTTP 层也更易调试&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;流式能力&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;服务端四流齐全：Unary / Client / Server / Bidi&lt;/td&gt;
+					&lt;td&gt;HTTP 下主要是 Unary + 服务端推送（Subscription、async generator 流式 query）；无 gRPC 式 client stream / bidi；复杂双向可组合 WebSocket&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;服务端&lt;/strong&gt;四流齐全；&lt;strong&gt;浏览器&lt;/strong&gt;侧成熟的是 Unary + Server Stream，Client / Bidi 受 Fetch 限制（见下表）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;全栈开发体验&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;多语言各自生成代码；前端还要单独搞 grpc-web&lt;/td&gt;
+					&lt;td&gt;TS 前后端共享类型，基本零代码生成，Next.js 集成成熟&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;.proto&lt;/code&gt; 一次生成多语言；前端 TS、后端 Go / Python / Java 类型对齐&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;适用场景&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;机房内网、多语言微服务互调&lt;/td&gt;
+					&lt;td&gt;TS 全栈、Next.js BFF、LLM token 流式输出等「服务端往下推」场景&lt;/td&gt;
+					&lt;td&gt;想统一 Protobuf IDL，且浏览器要走 Fetch + 可选 server stream&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;性能&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;内网 HTTP/2 + 二进制，吞吐和延迟通常最优&lt;/td&gt;
+					&lt;td&gt;JSON 序列化，纯内网场景一般弱于 gRPC&lt;/td&gt;
+					&lt;td&gt;配二进制编码时接近 gRPC；JSON 模式与 tRPC 同属 JSON over HTTP，需实测对比&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;依赖与侵入&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;重：protoc、代码生成、HTTP/2 运维&lt;/td&gt;
+					&lt;td&gt;轻：主要是 TS 运行时，无额外编译链&lt;/td&gt;
+					&lt;td&gt;中等：Buf / protoc 生成代码；运行时库相对轻&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;鉴权 / 元数据&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;HTTP/2 Header + gRPC Metadata&lt;/td&gt;
+					&lt;td&gt;普通 HTTP Header / Cookie，和 Web 开发一致&lt;/td&gt;
+					&lt;td&gt;HTTP Header 传 Metadata，兼容 gRPC Metadata 习惯&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 class="heading-element" id="流式能力补充服务端-vs-浏览器容易踩坑"&gt;&lt;span&gt;流式能力补充：服务端 vs 浏览器（容易踩坑）&lt;/span&gt;
+ &lt;a href="#%e6%b5%81%e5%bc%8f%e8%83%bd%e5%8a%9b%e8%a1%a5%e5%85%85%e6%9c%8d%e5%8a%a1%e7%ab%af-vs-%e6%b5%8f%e8%a7%88%e5%99%a8%e5%ae%b9%e6%98%93%e8%b8%a9%e5%9d%91" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;很多人对比时只看「协议支持四流」，忘了 &lt;strong&gt;浏览器 Fetch 的能力边界&lt;/strong&gt;。简表如下：&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;流类型&lt;/th&gt;
+					&lt;th&gt;gRPC（内网服务间）&lt;/th&gt;
+					&lt;th&gt;Connect（服务端）&lt;/th&gt;
+					&lt;th&gt;Connect（浏览器客户端）&lt;/th&gt;
+					&lt;th&gt;tRPC（HTTP）&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;Unary（一问一答）&lt;/td&gt;
+					&lt;td&gt;✅&lt;/td&gt;
+					&lt;td&gt;✅&lt;/td&gt;
+					&lt;td&gt;✅&lt;/td&gt;
+					&lt;td&gt;✅&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;Server Stream（服务端持续推）&lt;/td&gt;
+					&lt;td&gt;✅&lt;/td&gt;
+					&lt;td&gt;✅&lt;/td&gt;
+					&lt;td&gt;✅（LLM 流式 token 够用）&lt;/td&gt;
+					&lt;td&gt;✅（Subscription / 流式 query）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;Client Stream（客户端持续发）&lt;/td&gt;
+					&lt;td&gt;✅&lt;/td&gt;
+					&lt;td&gt;✅&lt;/td&gt;
+					&lt;td&gt;⚠️ 实验性 / 浏览器支持不全&lt;/td&gt;
+					&lt;td&gt;❌&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;Bidi（同时双向流）&lt;/td&gt;
+					&lt;td&gt;✅&lt;/td&gt;
+					&lt;td&gt;✅&lt;/td&gt;
+					&lt;td&gt;❌ 非真双工（Fetch 暂无稳定的 full duplex）&lt;/td&gt;
+					&lt;td&gt;❌（可用 WebSocket 拼交互，语义不同）&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;一句话&lt;/strong&gt;：LLM 聊天「模型往下吐 token」= Server Stream，三种方案在浏览器里都能做；「浏览器和模型同时双向流式对话」在 2026 年仍不能指望 Connect / gRPC 在浏览器里原生搞定，通常要 WebSocket 或 BFF 中转。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 class="heading-element" id="场景选型总结"&gt;&lt;span&gt;场景选型总结&lt;/span&gt;
+ &lt;a href="#%e5%9c%ba%e6%99%af%e9%80%89%e5%9e%8b%e6%80%bb%e7%bb%93" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;内网多语言微服务互调（Go / Python / Java）&lt;/strong&gt; → &lt;strong&gt;gRPC&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Next.js + TS 同栈、BFF 聚合、LLM 服务端流式输出&lt;/strong&gt; → &lt;strong&gt;tRPC&lt;/strong&gt;（或 tRPC BFF + 内网 gRPC，见架构 1）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;全链路共用一份 &lt;code&gt;.proto&lt;/code&gt;、浏览器 Fetch 调 Connect 网关、内网服务间要完整四流&lt;/strong&gt; → &lt;strong&gt;Connect-RPC&lt;/strong&gt;（见架构 2）&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h1 class="heading-element" id="二架构-1nextjstrpc-fe--bff-内网微服务grpc"&gt;&lt;span&gt;二、架构 1：Next.js（tRPC FE + BFF）+ 内网微服务（gRPC）&lt;/span&gt;
+ &lt;a href="#%e4%ba%8c%e6%9e%b6%e6%9e%84-1nextjstrpc-fe--bff-%e5%86%85%e7%bd%91%e5%be%ae%e6%9c%8d%e5%8a%a1grpc" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h1&gt;&lt;h2 class="heading-element" id="架构说明"&gt;&lt;span&gt;架构说明&lt;/span&gt;
+ &lt;a href="#%e6%9e%b6%e6%9e%84%e8%af%b4%e6%98%8e" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;前端&lt;/strong&gt;：Next.js App Router / Pages Router，用 tRPC Client 调 BFF&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;BFF&lt;/strong&gt;：Next.js API Route 上的 tRPC Server，负责鉴权、校验、聚合、限流&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;BFF ↔ 微服务&lt;/strong&gt;：内网走 &lt;strong&gt;gRPC&lt;/strong&gt;（Go / Python / Java 集群）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;存储&lt;/strong&gt;：业务服务下挂 Redis / DB&lt;/li&gt;
+&lt;/ol&gt;
+&lt;pre&gt;&lt;code&gt;flowchart LR
+ subgraph Client [浏览器端 Next.js FE]
+ A1[页面组件]
+ A2[tRPC Client&amp;lt;br/&amp;gt;Fetch 调 BFF]
+ A1 --&amp;gt; A2
+ end
+
+ subgraph BFF [Next.js BFF&amp;lt;br/&amp;gt;tRPC Server]
+ B1[tRPC 路由&amp;lt;br/&amp;gt;Zod 校验 / 鉴权 / 缓存]
+ B2[gRPC Client&amp;lt;br/&amp;gt;内网调微服务]
+ B1 &amp;lt;--&amp;gt; B2
+ end
+
+ subgraph InternalNetwork [内网微服务 - gRPC]
+ subgraph PythonService [Python gRPC 服务&amp;lt;br/&amp;gt;grpcio / Connect-Python]
+ C1[AI 对话服务&amp;lt;br/&amp;gt;LangGraph 编排]
+ end
+ subgraph GoService [Go gRPC 服务]
+ D1[用户 / 会话管理]
+ D2[计费 / 权限]
+ end
+ subgraph JavaService [Java gRPC 服务]
+ E1[消息落库]
+ end
+ end
+
+ subgraph Storage [存储]
+ S1[(Redis 会话 / 取消标记)]
+ S2[(PostgreSQL 对话)]
+ end
+
+ A2 --&amp;gt;|HTTP JSON tRPC| B1
+ B2 --&amp;gt;|内网 HTTP/2 gRPC 二进制| C1
+ B2 --&amp;gt;|内网 HTTP/2 gRPC 二进制| D1
+ B2 --&amp;gt;|内网 HTTP/2 gRPC 二进制| D2
+ B2 --&amp;gt;|内网 HTTP/2 gRPC 二进制| E1
+
+ C1 --&amp;gt; S1
+ D1 --&amp;gt; S1
+ E1 --&amp;gt; S2&lt;/code&gt;&lt;/pre&gt;&lt;h2 class="heading-element" id="技术分层要点"&gt;&lt;span&gt;技术分层要点&lt;/span&gt;
+ &lt;a href="#%e6%8a%80%e6%9c%af%e5%88%86%e5%b1%82%e8%a6%81%e7%82%b9" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;公网（浏览器 ↔ BFF）&lt;/strong&gt;：tRPC + JSON，类型前后端共享，前端迭代快&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;内网（BFF ↔ 微服务）&lt;/strong&gt;：gRPC + HTTP/2 二进制，适合多语言、高吞吐&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;隔离好处&lt;/strong&gt;：公网不暴露 gRPC；CORS、登录、限流集中在 BFF；内网专注性能&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h1 class="heading-element" id="三架构-2connect-rpc-统一-idl浏览器--bff--内网"&gt;&lt;span&gt;三、架构 2：Connect-RPC 统一 IDL（浏览器 + BFF + 内网）&lt;/span&gt;
+ &lt;a href="#%e4%b8%89%e6%9e%b6%e6%9e%84-2connect-rpc-%e7%bb%9f%e4%b8%80-idl%e6%b5%8f%e8%a7%88%e5%99%a8--bff--%e5%86%85%e7%bd%91" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h1&gt;&lt;h2 class="heading-element" id="架构说明-1"&gt;&lt;span&gt;架构说明&lt;/span&gt;
+ &lt;a href="#%e6%9e%b6%e6%9e%84%e8%af%b4%e6%98%8e-1" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;浏览器&lt;/strong&gt;：Connect-ES Client，Fetch 调 &lt;strong&gt;Connect 网关&lt;/strong&gt;（Connect-JSON，DevTools 可读）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;BFF / 网关&lt;/strong&gt;：Connect Server（Next.js 或 Go connect-go 均可），鉴权、限流；若下游是存量 gRPC，在此做协议桥接&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;内网微服务&lt;/strong&gt;：connect-go / Connect-Python 等；客户端侧 &lt;strong&gt;显式配置&lt;/strong&gt; gRPC 二进制模式（非自动切换）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;IDL&lt;/strong&gt;：全链路一份 &lt;code&gt;.proto&lt;/code&gt;；wire format 可按链路配置（公网 JSON、内网二进制）&lt;/li&gt;
+&lt;/ol&gt;
+&lt;pre&gt;&lt;code&gt;flowchart LR
+ subgraph Client [浏览器 Next.js FE]
+ A1[页面组件]
+ A2[Connect-ES Client&amp;lt;br/&amp;gt;Fetch &amp;#43; Connect-JSON]
+ A1 --&amp;gt; A2
+ end
+
+ subgraph Gateway [Connect 网关 / BFF&amp;lt;br/&amp;gt;Next.js 或 connect-go]
+ B1[Connect Server&amp;lt;br/&amp;gt;鉴权 / 限流 / 下游桥接]
+ end
+
+ subgraph InternalNetwork [内网 - Connect 或 gRPC 二进制]
+ subgraph PythonService [Python Connect 服务]
+ C1[AI 流式对话&amp;lt;br/&amp;gt;Server Stream]
+ end
+ subgraph GoService [Go Connect 服务]
+ D1[用户会话]
+ D2[计费统计]
+ end
+ subgraph JavaService [Java Connect 服务]
+ E1[消息持久化]
+ end
+ end
+
+ subgraph Storage [存储]
+ S1[(Redis)]
+ S2[(PostgreSQL)]
+ end
+
+ A2 --&amp;gt;|公网 Connect-JSON| B1
+ B1 --&amp;gt;|内网 gRPC 二进制&amp;lt;br/&amp;gt;需 transport 配置| C1
+ B1 --&amp;gt;|内网 gRPC 二进制| D1
+ B1 --&amp;gt;|内网 gRPC 二进制| D2
+ B1 --&amp;gt;|内网 gRPC 二进制| E1
+
+ C1 --&amp;gt; S1
+ D1 --&amp;gt; S1
+ E1 --&amp;gt; S2&lt;/code&gt;&lt;/pre&gt;&lt;h2 class="heading-element" id="核心优势与前提别误读"&gt;&lt;span&gt;核心优势与前提（别误读）&lt;/span&gt;
+ &lt;a href="#%e6%a0%b8%e5%bf%83%e4%bc%98%e5%8a%bf%e4%b8%8e%e5%89%8d%e6%8f%90%e5%88%ab%e8%af%af%e8%af%bb" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;一份 &lt;code&gt;.proto&lt;/code&gt; 贯穿全链路&lt;/strong&gt;：类型不割裂；但公网 JSON、内网二进制是 &lt;strong&gt;配置选择&lt;/strong&gt;，不会根据「内网 / 公网」自动切换。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;浏览器调试友好&lt;/strong&gt;：Unary 和 Server Stream 用 JSON，curl / 网络面板能直接看。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;内网流式无短板&lt;/strong&gt;：服务之间 Client Stream / Bidi 都能用；&lt;strong&gt;浏览器侧&lt;/strong&gt;仍以 Server Stream（如 LLM 吐字）为主。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;接存量 gRPC 的三种路&lt;/strong&gt;（不能简单说「浏览器直连老 gRPC」）：&lt;/li&gt;
+&lt;/ol&gt;
+&lt;ul&gt;
+&lt;li&gt;把服务迁到 &lt;strong&gt;connect-go&lt;/strong&gt;（同时说 Connect、gRPC、gRPC-Web）&lt;/li&gt;
+&lt;li&gt;BFF 用 &lt;strong&gt;Connect 客户端 + gRPC 协议模式&lt;/strong&gt; 调下游（服务端调用，不是浏览器）&lt;/li&gt;
+&lt;li&gt;前面加 &lt;strong&gt;Envoy Connect-gRPC Bridge&lt;/strong&gt; 等网关&lt;/li&gt;
+&lt;/ul&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;基础设施提示&lt;/strong&gt;：Connect 的 streaming 往往需要端到端 HTTP/2；经 NGINX 代理 streaming 可能有问题，生产环境更常见 Envoy、HAProxy 等。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;hr&gt;
+&lt;h1 class="heading-element" id="补充选型建议"&gt;&lt;span&gt;补充选型建议&lt;/span&gt;
+ &lt;a href="#%e8%a1%a5%e5%85%85%e9%80%89%e5%9e%8b%e5%bb%ba%e8%ae%ae" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h1&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;团队全 TS、主要是服务端往下推流（如 LLM token）、Next.js 快速交付&lt;/strong&gt; → &lt;strong&gt;tRPC BFF + 内网 gRPC&lt;/strong&gt;（架构 1）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;多语言微服务、要强约束 Protobuf IDL、浏览器要 Fetch + server stream、内网要完整四流&lt;/strong&gt; → &lt;strong&gt;Connect-RPC&lt;/strong&gt;（架构 2）；浏览器真双向流仍考虑 WebSocket&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;纯内网、无浏览器、追求极致内网性能&lt;/strong&gt; → 全套 &lt;strong&gt;gRPC&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="参考"&gt;&lt;span&gt;参考&lt;/span&gt;
+ &lt;a href="#%e5%8f%82%e8%80%83" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="本站姊妹篇"&gt;&lt;span&gt;本站姊妹篇&lt;/span&gt;
+ &lt;a href="#%e6%9c%ac%e7%ab%99%e5%a7%8a%e5%a6%b9%e7%af%87" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://joesmile.github.io/rpc-scenario.html"&gt;分场景选型：tRPC / gRPC / Connect-RPC 与流式方案怎么落地&lt;/a&gt; — 按业务场景拆选型，强调浏览器 vs 服务端的流式边界&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://joesmile.github.io/sse-vs-websocket.html"&gt;SSE 和 WebSocket 怎么选？&lt;/a&gt; — 浏览器流式传输层对比；EP02 选 SSE 而非 WebSocket 的产品与技术理由&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://joesmile.github.io/abort-controller.html"&gt;AI 聊天 Stop 为什么要「双发 abort」？&lt;/a&gt; — Server Stream 场景下 Stop 不必 Bidi；AbortController + Cancel API 实践&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 class="heading-element" id="memoryos-项目技术方案架构-1-落地参考"&gt;&lt;span&gt;MemoryOS 项目技术方案（架构 1 落地参考）&lt;/span&gt;
+ &lt;a href="#memoryos-%e9%a1%b9%e7%9b%ae%e6%8a%80%e6%9c%af%e6%96%b9%e6%a1%88%e6%9e%b6%e6%9e%84-1-%e8%90%bd%e5%9c%b0%e5%8f%82%e8%80%83" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;实际栈为 &lt;strong&gt;Next.js BFF + FastAPI SSE + LangGraph&lt;/strong&gt;，公网 HTTP 流式、内网可扩展 gRPC，与上文「tRPC BFF + 内网 gRPC」同属分层思路（MemoryOS 当前 BFF 为 Next Route + AI SDK，非 tRPC）。&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;文档&lt;/th&gt;
+					&lt;th&gt;说明&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;a href="https://github.com/JoeSmile/memoryOS/blob/main/docs/tasks/epics/EP02-streaming-chat.md" target="_blank" rel="external nofollow noopener noreferrer"&gt;EP02 流式对话史诗&lt;/a&gt;&lt;/td&gt;
+					&lt;td&gt;七阶段交付、SSE + LangGraph 总览&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;a href="https://github.com/JoeSmile/memoryOS/blob/main/docs/tasks/learning/L02-streaming-langgraph.md" target="_blank" rel="external nofollow noopener noreferrer"&gt;L02 流式对话 + LangGraph 学习笔记&lt;/a&gt;&lt;/td&gt;
+					&lt;td&gt;聊天 UI、SSE 解析、&lt;code&gt;AbortController&lt;/code&gt; 竞态&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;a href="https://github.com/JoeSmile/memoryOS/blob/main/openspec/changes/archive/2026-06-03-ep02-chat-sse/design.md" target="_blank" rel="external nofollow noopener noreferrer"&gt;ep02-chat-sse 设计&lt;/a&gt;&lt;/td&gt;
+					&lt;td&gt;为何用 SSE 帧 + JSON、Non-Goals（本阶段不上 WebSocket）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;a href="https://github.com/JoeSmile/memoryOS/blob/main/docs/tech/langgraph-chat.md" target="_blank" rel="external nofollow noopener noreferrer"&gt;LangGraph 对话编排&lt;/a&gt;&lt;/td&gt;
+					&lt;td&gt;图编排、&lt;code&gt;astream_events&lt;/code&gt; → SSE &lt;code&gt;token&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;a href="https://github.com/JoeSmile/memoryOS/blob/main/docs/tech/chat-stream-cancel.md" target="_blank" rel="external nofollow noopener noreferrer"&gt;聊天 Stop / Cancel 技术方案&lt;/a&gt;&lt;/td&gt;
+					&lt;td&gt;BFF drain、Redis cancel、Runner 双检&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;a href="https://github.com/JoeSmile/memoryOS/blob/main/docs/tech/chat-rag-stream.md" target="_blank" rel="external nofollow noopener noreferrer"&gt;聊天 RAG 流式协议与 BFF 升级&lt;/a&gt;&lt;/td&gt;
+					&lt;td&gt;SSE → AI SDK Data Stream、&lt;code&gt;metadata.rag_sources&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;a href="https://github.com/JoeSmile/memoryOS/blob/main/openspec/specs/chat-sse/spec.md" target="_blank" rel="external nofollow noopener noreferrer"&gt;chat-sse OpenSpec 规格&lt;/a&gt;&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;POST /chat/completions&lt;/code&gt; 事件类型与错误码&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;仓库入口：&lt;a href="https://github.com/JoeSmile/memoryOS" target="_blank" rel="external nofollow noopener noreferrer"&gt;JoeSmile/memoryOS&lt;/a&gt;&lt;/p&gt;
+&lt;h3 class="heading-element" id="协议与框架官方文档"&gt;&lt;span&gt;协议与框架官方文档&lt;/span&gt;
+ &lt;a href="#%e5%8d%8f%e8%ae%ae%e4%b8%8e%e6%a1%86%e6%9e%b6%e5%ae%98%e6%96%b9%e6%96%87%e6%a1%a3" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://connectrpc.com/docs/faq" target="_blank" rel="external nofollow noopener noreferrer"&gt;Connect RPC — FAQs&lt;/a&gt;（浏览器 streaming、接存量 gRPC、NGINX 限制）&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://connectrpc.com/docs/web/choosing-a-protocol" target="_blank" rel="external nofollow noopener noreferrer"&gt;Connect for Web — Choosing a protocol&lt;/a&gt;（Connect vs gRPC-Web transport）&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://trpc.io/docs/server/subscriptions" target="_blank" rel="external nofollow noopener noreferrer"&gt;tRPC — Subscriptions&lt;/a&gt;（SSE / WebSocket 服务端推送）&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://grpc.io/docs/guides/status-codes/" target="_blank" rel="external nofollow noopener noreferrer"&gt;gRPC — Status codes&lt;/a&gt;（17 种 canonical codes）&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://developer.chrome.com/docs/capabilities/web-apis/fetch-streaming-requests" target="_blank" rel="external nofollow noopener noreferrer"&gt;Chrome Developers — Fetch streaming requests&lt;/a&gt;（&lt;code&gt;duplex: 'half'&lt;/code&gt; 与浏览器限制）&lt;/li&gt;
+&lt;/ul&gt;</description></item><item><title>AI 聊天 Stop 为什么要「双发 abort」？AbortController + Cancel API 实践总结</title><link>https://joesmile.github.io/abort-controller.html</link><pubDate>Wed, 03 Jun 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/abort-controller.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;p&gt;在 AI 流式聊天里，用户点 &lt;strong&gt;停止生成&lt;/strong&gt;，表面往往只是一次 &lt;code&gt;AbortController.abort()&lt;/code&gt;。在 &lt;strong&gt;BFF + FastAPI SSE + LangGraph&lt;/strong&gt; 架构下，MemoryOS 落地的是 &lt;strong&gt;「双发 abort」&lt;/strong&gt;：两套能力并行、各司其职。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;AbortController&lt;/strong&gt;：断开浏览器 → BFF 的 fetch 流，UI 尽快停字&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Cancel API&lt;/strong&gt;：&lt;code&gt;POST /api/chat/cancel&lt;/code&gt; 写 Redis，让&lt;strong&gt;正在跑这条流的那台 API Worker&lt;/strong&gt; 上的 Runner &lt;strong&gt;尽最大努力&lt;/strong&gt;停掉 LLM 上游&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Wire 仍是 SSE（基于 fetch + ReadableStream），Stop 要同时解决 &lt;strong&gt;UI、落库、成本、多实例&lt;/strong&gt; 四类问题，单链路 abort 覆盖不全。&lt;/p&gt;
+&lt;h2 class="heading-element" id="一只-abort-fetch为什么不够"&gt;&lt;span&gt;一、只 abort fetch，为什么不够？&lt;/span&gt;
+ &lt;a href="#%e4%b8%80%e5%8f%aa-abort-fetch%e4%b8%ba%e4%bb%80%e4%b9%88%e4%b8%8d%e5%a4%9f" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;AbortController&lt;/code&gt; 只作用于&lt;strong&gt;浏览器 → BFF 这一条 fetch&lt;/strong&gt;。它不会自动变成 Redis 里的 cancel 标记，也不会保证多实例部署下「处理 Cancel POST 的 Worker」把标记传到「正在跑 SSE 的 Worker」。&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;仅 abort 浏览器 fetch&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;实际后果&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;UI 停字&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;BFF 收到 &lt;code&gt;req.signal&lt;/code&gt;，&lt;code&gt;clientStopped&lt;/code&gt; 后不再 enqueue，体验正常&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;BFF &lt;strong&gt;跳过 drain、立刻&lt;/strong&gt; abort 上游&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;FastAPI SSE 被硬掐，&lt;code&gt;finalize&lt;/code&gt; 来不及 commit，&lt;strong&gt;刷新后 assistant 丢失&lt;/strong&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;多 API Worker&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;abort 只断浏览器侧；若&lt;strong&gt;不&lt;/strong&gt;写 Redis，Cancel 请求打到 B 实例时，A 实例上的 Runner 可能仍推理到 drain 结束&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;LLM 供应商计费&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;下游断连 ≠ 100% 停费；行业普遍为 &lt;strong&gt;best-effort&lt;/strong&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;澄清&lt;/strong&gt;：LangGraph Runner 与这条 SSE 请求在&lt;strong&gt;同一 API 进程&lt;/strong&gt;里跑；「跨实例」指的是 &lt;strong&gt;Cancel HTTP 与 SSE 长连接可能落在不同 Worker&lt;/strong&gt;，靠 Redis 协调，而不是「abort 一次就全集群停」。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3 class="heading-element" id="abortcontrollerabort-与-readablestreamcancel"&gt;&lt;span&gt;AbortController.abort 与 ReadableStream.cancel&lt;/span&gt;
+ &lt;a href="#abortcontrollerabort-%e4%b8%8e-readablestreamcancel" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;API&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;作用&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;AbortController.abort()&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;终止 fetch &lt;strong&gt;整次请求&lt;/strong&gt;（含 &lt;code&gt;response.body&lt;/code&gt; 的读取）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;reader.cancel()&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;取消&lt;strong&gt;流读取端&lt;/strong&gt;；MemoryOS 在 drain 读完后调用，再 &lt;code&gt;upstreamAbort&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;BFF 顺序：&lt;strong&gt;先 read 消费上游（不转发）→ reader.cancel → upstreamAbort&lt;/strong&gt;。说「cancel 保留 HTTP 连接」仅指&lt;strong&gt;在调用 upstreamAbort 之前&lt;/strong&gt; BFF 仍连着 API；最终仍会 abort 上游 fetch。&lt;/p&gt;
+&lt;h2 class="heading-element" id="二双发-abort分工与时序"&gt;&lt;span&gt;二、双发 abort：分工与时序&lt;/span&gt;
+ &lt;a href="#%e4%ba%8c%e5%8f%8c%e5%8f%91-abort%e5%88%86%e5%b7%a5%e4%b8%8e%e6%97%b6%e5%ba%8f" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;两条链路 &lt;strong&gt;并行&lt;/strong&gt;（Cancel 不阻塞 UI），前端对 Cancel 采用 fire-and-forget。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sequenceDiagram
+ participant U as 浏览器
+ participant B as BFF
+ participant A as FastAPI Worker A
+ participant R as Redis
+ participant L as LangGraph / LLM
+
+ U-&amp;gt;&amp;gt;B: POST /api/chat
+ B-&amp;gt;&amp;gt;A: POST completions（SSE）
+ A-&amp;gt;&amp;gt;R: register stream_active
+ A-&amp;gt;&amp;gt;L: stream_tokens
+
+ Note over U: 用户 Stop
+ U-&amp;gt;&amp;gt;U: flushSync 冻结 UI 文本
+ par 双发（互不等待）
+ U-&amp;gt;&amp;gt;B: POST /api/chat/cancel
+ B-&amp;gt;&amp;gt;A: POST /completions/cancel（可能 Worker B）
+ A-&amp;gt;&amp;gt;R: SET stream_cancel
+ U-&amp;gt;&amp;gt;B: AbortController.abort()
+ B-&amp;gt;&amp;gt;B: clientStopped &amp;#43; drain 上游
+ end
+ A-&amp;gt;&amp;gt;R: Runner 轮询命中 cancel（Worker A）
+ A-&amp;gt;&amp;gt;L: aclose 停止生成
+ A-&amp;gt;&amp;gt;A: finalize → interrupted 落库
+ B-&amp;gt;&amp;gt;B: drain 结束后 upstreamAbort
+ B--&amp;gt;&amp;gt;U: 流关闭&lt;/code&gt;&lt;/pre&gt;&lt;h3 class="heading-element" id="路径-aabortcontroller体验层"&gt;&lt;span&gt;路径 A：AbortController（体验层）&lt;/span&gt;
+ &lt;a href="#%e8%b7%af%e5%be%84-aabortcontroller%e4%bd%93%e9%aa%8c%e5%b1%82" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;useChat.stop()&lt;/code&gt; → abort 浏览器 → BFF 的 fetch → &lt;code&gt;req.signal&lt;/code&gt;：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;clientStopped = true&lt;/code&gt;：不再向浏览器转发 token&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;drainThenAbort&lt;/strong&gt;：继续 &lt;code&gt;reader.read()&lt;/code&gt; 消费上游字节，&lt;strong&gt;不写入&lt;/strong&gt;前端，以便 API 侧 &lt;code&gt;event_generator&lt;/code&gt; 的 &lt;code&gt;finally&lt;/code&gt; 仍有机会 &lt;strong&gt;finalize&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;reader.cancel()&lt;/code&gt;，再 &lt;code&gt;upstreamAbort.abort()&lt;/code&gt; 断 BFF → API&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;drain 期间 BFF &lt;strong&gt;仍连着 API&lt;/strong&gt;，Runner 不会仅因「浏览器已 abort」立刻停；因此 &lt;strong&gt;Cancel API 与 abort 并行&lt;/strong&gt; 很重要：靠 Redis 让 Runner 在 drain 窗口内就开始停 LLM。&lt;/p&gt;
+&lt;h3 class="heading-element" id="路径-bcancel-api协调层"&gt;&lt;span&gt;路径 B：Cancel API（协调层）&lt;/span&gt;
+ &lt;a href="#%e8%b7%af%e5%be%84-bcancel-api%e5%8d%8f%e8%b0%83%e5%b1%82" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;场景&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;为何需要 Cancel API&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;多 API Worker&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Cancel POST 与 SSE 可能不在同一进程，Redis 标记各 Worker 都能轮询到&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;drain 窗口&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;浏览器已断，但 BFF→API 仍通；仅靠 &lt;code&gt;disconnect&lt;/code&gt; 会晚于 cancel 标记&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;刷新 / 关 Tab&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;可能来不及发 Cancel；走 API &lt;code&gt;Request.is_disconnected()&lt;/code&gt;（见第五节）&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;Cancel body 常用字段：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;stream_id&lt;/code&gt;：&lt;code&gt;X-Stream-Id&lt;/code&gt; 响应头或 SSE &lt;code&gt;start&lt;/code&gt; 帧（头优先；帧在弱网下可能晚到）&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;visible_length&lt;/code&gt; / &lt;code&gt;visible_content&lt;/code&gt;（≤256 字符时可 inline 全文）：落库与 UI 对齐&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Runner 每 &lt;strong&gt;250ms&lt;/strong&gt; 轮询 &lt;code&gt;disconnect | stream_cancel&lt;/code&gt;（MemoryOS &lt;code&gt;_DISCONNECT_POLL_SECONDS = 0.25&lt;/code&gt;）。&lt;/p&gt;
+&lt;h2 class="heading-element" id="三stop-完整流程"&gt;&lt;span&gt;三、Stop 完整流程&lt;/span&gt;
+ &lt;a href="#%e4%b8%89stop-%e5%ae%8c%e6%95%b4%e6%b5%81%e7%a8%8b" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;pre&gt;&lt;code&gt;flowchart TB
+ subgraph FE[&amp;#34;浏览器&amp;#34;]
+ S1[&amp;#34;flushSync&amp;#34;]
+ S2[&amp;#34;POST /api/chat/cancel&amp;#34;]
+ S3[&amp;#34;useChat.stop()&amp;#34;]
+ end
+ subgraph BFF[&amp;#34;Next.js BFF&amp;#34;]
+ B1[&amp;#34;req.signal.abort&amp;#34;]
+ B2[&amp;#34;clientStopped&amp;#34;]
+ B3[&amp;#34;drain read 上游&amp;#34;]
+ B4[&amp;#34;cancel &amp;#43; upstreamAbort&amp;#34;]
+ end
+ subgraph API[&amp;#34;FastAPI（跑 SSE 的 Worker）&amp;#34;]
+ R1[&amp;#34;Redis stream_cancel&amp;#34;]
+ C1[&amp;#34;Runner 轮询 cancel / disconnect&amp;#34;]
+ C2[&amp;#34;aclose LangChain&amp;#34;]
+ C3[&amp;#34;finalize 落库&amp;#34;]
+ end
+ S1 --&amp;gt; S2
+ S1 --&amp;gt; S3
+ S3 --&amp;gt; B1
+ B1 --&amp;gt; B2 --&amp;gt; B3 --&amp;gt; B4
+ S2 --&amp;gt; R1
+ R1 --&amp;gt; C1
+ B3 --&amp;gt; C3
+ C1 --&amp;gt; C2 --&amp;gt; C3
+ B4 --&amp;gt; C1&lt;/code&gt;&lt;/pre&gt;&lt;h3 class="heading-element" id="前端-stop与-memoryos-一致"&gt;&lt;span&gt;前端 stop（与 MemoryOS 一致）&lt;/span&gt;
+ &lt;a href="#%e5%89%8d%e7%ab%af-stop%e4%b8%8e-memoryos-%e4%b8%80%e8%87%b4" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;pre&gt;&lt;code&gt;stop: () =&amp;gt; {
+ flushSync(() =&amp;gt; { /* 冻结最后一条 assistant */ });
+
+ void fetch(&amp;#34;/api/chat/cancel&amp;#34;, { /* stream_id &amp;#43; visible_* */ });
+
+ useChatStop(); // 内置 AbortController，非递归调用自身
+};&lt;/code&gt;&lt;/pre&gt;&lt;h3 class="heading-element" id="bff-drainthenabort与-memoryos-一致"&gt;&lt;span&gt;BFF drainThenAbort（与 MemoryOS 一致）&lt;/span&gt;
+ &lt;a href="#bff-drainthenabort%e4%b8%8e-memoryos-%e4%b8%80%e8%87%b4" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;pre&gt;&lt;code&gt;req.signal.addEventListener(&amp;#34;abort&amp;#34;, () =&amp;gt; {
+ void drainUpstreamOnClientAbort?.();
+});
+
+async function drainThenAbort() {
+ markClientStopped();
+ try {
+ while (true) {
+ const { done } = await reader.read();
+ if (done) break;
+ }
+ } catch { /* best-effort */ }
+ await reader.cancel();
+ options?.abortUpstream?.();
+}&lt;/code&gt;&lt;/pre&gt;&lt;h2 class="heading-element" id="四如何停-llm计费边界"&gt;&lt;span&gt;四、如何停 LLM？计费边界&lt;/span&gt;
+ &lt;a href="#%e5%9b%9b%e5%a6%82%e4%bd%95%e5%81%9c-llm%e8%ae%a1%e8%b4%b9%e8%be%b9%e7%95%8c" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;层级&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;实现&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;能否停住 LLM 生成&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;计费&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;浏览器 abort&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;断开展示侧 fetch&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;否&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;否&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;BFF drain / cancel&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;消费或清本地缓冲&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;否（API 仍可能推）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;否&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;Redis cancel + Runner&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;轮询后 &lt;code&gt;aclose&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;best-effort 是&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;通常少计&lt;strong&gt;后续&lt;/strong&gt; token&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;upstreamAbort&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;断 BFF→API HTTP&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;触发 disconnect 路径&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;间接&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;已生成的 token 多数厂商仍会计费；应用层目标是 &lt;strong&gt;写 cancel、停止读流、关闭 async generator&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 class="heading-element" id="五缓冲刷新弱网ttl"&gt;&lt;span&gt;五、缓冲：刷新、弱网、TTL&lt;/span&gt;
+ &lt;a href="#%e4%ba%94%e7%bc%93%e5%86%b2%e5%88%b7%e6%96%b0%e5%bc%b1%e7%bd%91ttl" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;参数&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;MemoryOS&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;作用&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;drain&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;读完上游或连接结束&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;给 API &lt;code&gt;finalize&lt;/code&gt; 时间；&lt;strong&gt;不等于&lt;/strong&gt;「停 LLM」，停 LLM 靠 cancel 标记&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;Redis TTL&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;120s&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;cancel / active 键过期；可酌情调短（如 ~30s），过短不利幂等与晚到 cancel&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;Runner 轮询&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;250ms&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Stop 体感上最多约 250ms 惯性&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;strong&gt;刷新页面&lt;/strong&gt;：通常&lt;strong&gt;不会&lt;/strong&gt;执行 Stop 里的 Cancel POST；API 在 Runner / 路由层检测 &lt;strong&gt;&lt;code&gt;Request.is_disconnected()&lt;/code&gt;&lt;/strong&gt;，按 disconnect 落库 &lt;code&gt;interrupted&lt;/code&gt;（一般&lt;strong&gt;无&lt;/strong&gt; &lt;code&gt;visible_length&lt;/code&gt;，以服务端已 append 的 token 为准，可能比 UI 略多）。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;弱网一致性&lt;/strong&gt;：主动 Stop 时传 &lt;code&gt;visible_length&lt;/code&gt;，&lt;code&gt;finalize&lt;/code&gt; 截断为用户所见，避免「库比 UI 多字」。&lt;/p&gt;
+&lt;h2 class="heading-element" id="六落库规则"&gt;&lt;span&gt;六、落库规则&lt;/span&gt;
+ &lt;a href="#%e5%85%ad%e8%90%bd%e5%ba%93%e8%a7%84%e5%88%99" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;场景&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;落库内容&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;status&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;Stop + &lt;code&gt;visible_length&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;可见前缀截断&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;interrupted&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;Stop + 短文 &lt;code&gt;visible_content&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;完整可见原文&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;interrupted&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;正常结束&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;全文&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;complete&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;Tab 关闭 / disconnect&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;已 append 部分（无 visible 时）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;interrupted&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;无任何 token / tool&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;不落库&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;—&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 class="heading-element" id="七踩坑复盘"&gt;&lt;span&gt;七、踩坑复盘&lt;/span&gt;
+ &lt;a href="#%e4%b8%83%e8%b8%a9%e5%9d%91%e5%a4%8d%e7%9b%98" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;现象&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;根因&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;对策&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;Stop 后刷新丢消息&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;未 drain 就 upstreamAbort&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;drainThenAbort&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;Stop 后仍出字&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Cancel RTT + 250ms 轮询 + 管道缓冲&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;flushSync + clientStopped&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;DB 字数多于 UI&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;cancel 到达前仍在 append&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;visible_length&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;多 Tab 长连接多&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;HTTP/1.1 同源连接数有限&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;HTTP/2 / 控制并发；与「换 fetch」无直接等价关系&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 class="heading-element" id="八总结"&gt;&lt;span&gt;八、总结&lt;/span&gt;
+ &lt;a href="#%e5%85%ab%e6%80%bb%e7%bb%93" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;问题&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;回答&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;为什么双发？&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;abort：&lt;strong&gt;UI + 停转发&lt;/strong&gt;；Cancel + Redis：&lt;strong&gt;跨 Worker 停 Runner&lt;/strong&gt;（drain 期间尤其需要）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;为何不立刻掐上游？&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;先 drain + cancel 标记，保证 &lt;strong&gt;finalize 落库&lt;/strong&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;如何停 LLM？&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Redis cancel → Runner 轮询 → &lt;code&gt;aclose&lt;/code&gt; →（随后）upstreamAbort&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;缓冲怎么取？&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;drain 不能省；Redis TTL 120s 可按产品调&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;strong&gt;一句话&lt;/strong&gt;：Stop = &lt;strong&gt;UI 快照 + Cancel 标记 + 停转发 + drain 落库 + 再断上游&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 class="heading-element" id="相关"&gt;&lt;span&gt;相关&lt;/span&gt;
+ &lt;a href="#%e7%9b%b8%e5%85%b3" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;代码仓库：&lt;a href="https://github.com/JoeSmile/memoryOS" target="_blank" rel="external nofollow noopener noreferrer"&gt;JoeSmile/memoryOS&lt;/a&gt;（Stop / Cancel 设计见 &lt;a href="https://github.com/JoeSmile/memoryOS/blob/main/docs/tech/chat-stream-cancel.md" target="_blank" rel="external nofollow noopener noreferrer"&gt;&lt;code&gt;docs/tech/chat-stream-cancel.md&lt;/code&gt;&lt;/a&gt;）&lt;/li&gt;
+&lt;li&gt;本站：&lt;a href="https://joesmile.github.io/sse-vs-websocket.html"&gt;SSE 和 WebSocket 怎么选？&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://developer.mozilla.org/en-US/docs/Web/API/AbortController" target="_blank" rel="external nofollow noopener noreferrer"&gt;MDN：AbortController&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream/cancel" target="_blank" rel="external nofollow noopener noreferrer"&gt;MDN：ReadableStream.cancel&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description></item><item><title>SSE 和 WebSocket 怎么选？为什么 LLM 聊天常用 fetch + ReadableStream</title><link>https://joesmile.github.io/sse-vs-websocket.html</link><pubDate>Mon, 01 Jun 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/sse-vs-websocket.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;p&gt;做 AI 聊天客户端时，常会碰到两个相近的问题：&lt;strong&gt;SSE（Server-Sent Events，服务端推送事件）和 WebSocket 怎么选？&lt;/strong&gt; 以及 &lt;strong&gt;明明后端已经是 SSE，前端为什么不用浏览器自带的 &lt;code&gt;EventSource&lt;/code&gt;，而用 &lt;code&gt;fetch&lt;/code&gt; + &lt;code&gt;ReadableStream&lt;/code&gt; 自己解析？&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 class="heading-element" id="一先对齐概念"&gt;&lt;span&gt;一、先对齐概念&lt;/span&gt;
+ &lt;a href="#%e4%b8%80%e5%85%88%e5%af%b9%e9%bd%90%e6%a6%82%e5%bf%b5" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;术语&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;全称&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;一句话&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;SSE&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Server-Sent Events&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;基于 HTTP 的&lt;strong&gt;单向&lt;/strong&gt;流：服务端 → 浏览器，文本格式通常是 &lt;code&gt;text/event-stream&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;WebSocket&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;—&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;在 TCP 上升级的全双工通道，客户端与服务端可&lt;strong&gt;双向&lt;/strong&gt;实时发消息&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;EventSource&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;—&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;浏览器内置 API，专门消费 GET 方式的 SSE&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;ReadableStream&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;—&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Fetch Response 的 &lt;code&gt;body&lt;/code&gt; 流，可用 &lt;code&gt;getReader()&lt;/code&gt; 按 chunk 读取任意 HTTP 响应体&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;下面默认说的 SSE，指 HTTP 长连接 + &lt;code&gt;Content-Type: text/event-stream&lt;/code&gt; 这一类实现。&lt;/p&gt;
+&lt;h2 class="heading-element" id="二sse-vs-websocket对比表"&gt;&lt;span&gt;二、SSE vs WebSocket：对比表&lt;/span&gt;
+ &lt;a href="#%e4%ba%8csse-vs-websocket%e5%af%b9%e6%af%94%e8%a1%a8" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;维度&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;SSE&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;WebSocket&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;底层协议&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;普通 &lt;strong&gt;HTTP/1.1 或 HTTP/2&lt;/strong&gt; 长连接，响应体不断追加&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;HTTP &lt;strong&gt;Upgrade&lt;/strong&gt; 到 &lt;code&gt;ws://&lt;/code&gt; / &lt;code&gt;wss://&lt;/code&gt;，独立帧协议&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;通信方向&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;单向&lt;/strong&gt;（服务端 → 客户端）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;双向&lt;/strong&gt;（客户端 ↔ 服务端）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;数据格式&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;文本为主（UTF-8），常见 &lt;code&gt;data:&lt;/code&gt; 行 + JSON&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;文本或二进制帧均可&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;浏览器 API&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;EventSource&lt;/code&gt;（仅 GET）或 &lt;code&gt;fetch&lt;/code&gt; + 流解析&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;WebSocket&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;鉴权&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;与 REST 相同：&lt;code&gt;Authorization&lt;/code&gt; 头、Cookie、BFF 代理&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;握手阶段带 Cookie；自定义头依赖实现&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;穿透代理 / CDN&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;走标准 HTTP，配置相对简单&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;部分代理对 Upgrade 支持不一，需额外配置&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;自动重连&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;EventSource&lt;/code&gt; &lt;strong&gt;内置&lt;/strong&gt;断线重连&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;需自行实现心跳与重连&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;连接数&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;受浏览器对&lt;strong&gt;同源 HTTP 连接数&lt;/strong&gt;限制（HTTP/1.1 时代更明显；HTTP/2 多路复用后缓解）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;单连接全双工，适合高频双向互动&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;速度&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;文本流式，LLM token 场景&lt;strong&gt;足够&lt;/strong&gt;；非极致低延迟游戏场景&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;双向、二进制场景更灵活；&lt;strong&gt;纯文本流式不一定更快&lt;/strong&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;典型场景&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;LLM 流式输出、日志 tail、行情推送、通知&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;在线协作、游戏、IM、音视频信令、高频双向指令&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;实现复杂度（聊天）&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;服务端推 token 即可，客户端解析流&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;需维护连接状态、心跳、重连、消息序&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;strong&gt;选型建议（简化版）：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;主要是 &lt;strong&gt;服务端持续推、客户端偶尔发&lt;/strong&gt;（例如 LLM 流式回复）→ &lt;strong&gt;SSE 更合适&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;需要 &lt;strong&gt;毫秒级双向&lt;/strong&gt;、二进制、房间广播、游戏状态同步 → &lt;strong&gt;WebSocket 更合适&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 class="heading-element" id="三为什么很多-llm-api-用-sse"&gt;&lt;span&gt;三、为什么很多 LLM API 用 SSE？&lt;/span&gt;
+ &lt;a href="#%e4%b8%89%e4%b8%ba%e4%bb%80%e4%b9%88%e5%be%88%e5%a4%9a-llm-api-%e7%94%a8-sse" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;OpenAI、FastAPI 生态里的流式 Chat Completions，常见模式是：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;POST /v1/chat/completions
+Content-Type: application/json
+Accept: text/event-stream&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;响应体持续输出类似：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;data: {&amp;#34;event&amp;#34;:&amp;#34;token&amp;#34;,&amp;#34;data&amp;#34;:{&amp;#34;content&amp;#34;:&amp;#34;你&amp;#34;}}
+
+data: {&amp;#34;event&amp;#34;:&amp;#34;token&amp;#34;,&amp;#34;data&amp;#34;:{&amp;#34;content&amp;#34;:&amp;#34;好&amp;#34;}}
+
+data: {&amp;#34;event&amp;#34;:&amp;#34;done&amp;#34;,&amp;#34;data&amp;#34;:{&amp;#34;message_id&amp;#34;:&amp;#34;...&amp;#34;}}&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;原因可以归纳为：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;语义匹配&lt;/strong&gt;：生成式回复是「服务端一边算一边推」，客户端主要是&lt;strong&gt;收&lt;/strong&gt;，与 SSE 单向模型一致。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HTTP 生态&lt;/strong&gt;：复用现有网关、负载均衡、JWT 鉴权、日志与监控，不必单独维护 WebSocket 集群。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;实现成本&lt;/strong&gt;：后端用 &lt;code&gt;StreamingResponse&lt;/code&gt; / &lt;code&gt;text/event-stream&lt;/code&gt; 即可；比 WebSocket 的连接管理轻量。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;防火墙友好&lt;/strong&gt;：企业网络对 443 上的 HTTP 流通常比自定义 WS 更省事。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;WebSocket 并非不能做 LLM 流式，但在「HTTP POST 一问、流式多答」这一形态下，SSE 往往更直接。&lt;/p&gt;
+&lt;h2 class="heading-element" id="四ai-chat-client为什么用-fetch--readablestream而不是-eventsource"&gt;&lt;span&gt;四、AI Chat Client：为什么用 fetch + ReadableStream，而不是 EventSource？&lt;/span&gt;
+ &lt;a href="#%e5%9b%9bai-chat-client%e4%b8%ba%e4%bb%80%e4%b9%88%e7%94%a8-fetch--readablestream%e8%80%8c%e4%b8%8d%e6%98%af-eventsource" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;Wire 格式仍是 SSE（&lt;code&gt;data:&lt;/code&gt; + 空行分隔），但&lt;strong&gt;生产级 AI 聊天前端&lt;/strong&gt;普遍不用 &lt;code&gt;EventSource&lt;/code&gt;，而用 &lt;strong&gt;&lt;code&gt;fetch&lt;/code&gt; + &lt;code&gt;Response.body.getReader()&lt;/code&gt;&lt;/strong&gt;。核心原因如下。&lt;/p&gt;
+&lt;h3 class="heading-element" id="1-eventsource-只支持-get--放不下聊天请求体"&gt;&lt;span&gt;1. EventSource 只支持 GET —— 放不下聊天请求体&lt;/span&gt;
+ &lt;a href="#1-eventsource-%e5%8f%aa%e6%94%af%e6%8c%81-get--%e6%94%be%e4%b8%8d%e4%b8%8b%e8%81%8a%e5%a4%a9%e8%af%b7%e6%b1%82%e4%bd%93" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;EventSource&lt;/code&gt; 的构造函数只接受 &lt;strong&gt;URL 字符串&lt;/strong&gt;，等价于发起 &lt;strong&gt;GET&lt;/strong&gt;，&lt;strong&gt;无法携带 JSON body&lt;/strong&gt;。若硬要用 GET，只能把参数塞进 &lt;strong&gt;Query String&lt;/strong&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;GET /api/chat/stream?conversation_id=...&amp;amp;content=用户很长的问题......&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;这会带来两类硬限制：&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;（1）URL 长度上限&lt;/strong&gt;&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;层级&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;常见限制（量级）&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;浏览器 / 历史实现&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;约 &lt;strong&gt;2K～8K&lt;/strong&gt; 字符（因实现而异）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;Nginx 默认&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;large_client_header_buffers&lt;/code&gt;，URL 常按 &lt;strong&gt;8K&lt;/strong&gt; 量级规划&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;部分网关 / CDN&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;对 Request-URI 有独立上限&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;用户一条长消息、多个 ID（&lt;code&gt;conversation_id&lt;/code&gt;、&lt;code&gt;client_message_id&lt;/code&gt;）、regenerate 标志等，很容易顶到上限。&lt;strong&gt;POST + JSON body&lt;/strong&gt; 通常按 &lt;strong&gt;MB 级&lt;/strong&gt;配置（由服务端 &lt;code&gt;max body size&lt;/code&gt; 决定），更适合聊天。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;（2）语义与安全&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;问题正文出现在 URL 里，易进 &lt;strong&gt;访问日志、Referer、浏览器历史&lt;/strong&gt;，不适合放敏感或长文本。&lt;/li&gt;
+&lt;li&gt;REST 风格里，「发起一次 completion」是&lt;strong&gt;有副作用的写操作&lt;/strong&gt;，用 GET 也不符合常规 API 设计。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;真实接口因此几乎都是 &lt;strong&gt;POST&lt;/strong&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;POST /api/v1/chat/completions
+{
+ &amp;#34;conversation_id&amp;#34;: &amp;#34;...&amp;#34;,
+ &amp;#34;content&amp;#34;: &amp;#34;用户问题&amp;#34;,
+ &amp;#34;client_message_id&amp;#34;: &amp;#34;...&amp;#34;
+}&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;对话上下文、会话 ID、幂等键在 body 里，&lt;strong&gt;必须用 &lt;code&gt;fetch({ method: &amp;quot;POST&amp;quot;, body })&lt;/code&gt;&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 class="heading-element" id="2-需要自定义请求头bearer-token"&gt;&lt;span&gt;2. 需要自定义请求头（Bearer Token）&lt;/span&gt;
+ &lt;a href="#2-%e9%9c%80%e8%a6%81%e8%87%aa%e5%ae%9a%e4%b9%89%e8%af%b7%e6%b1%82%e5%a4%b4bearer-token" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;EventSource&lt;/code&gt; &lt;strong&gt;不能&lt;/strong&gt;设置 &lt;code&gt;Authorization: Bearer &amp;lt;token&amp;gt;&lt;/code&gt;（标准 API 无自定义 header 能力）。JWT 登录的 AI 产品几乎都要在 fetch 里带头：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;await fetch(&amp;#34;/api/v1/chat/completions&amp;#34;, {
+ method: &amp;#34;POST&amp;#34;,
+ headers: {
+ &amp;#34;Content-Type&amp;#34;: &amp;#34;application/json&amp;#34;,
+ Authorization: `Bearer ${token}`,
+ },
+ body: JSON.stringify({ conversation_id, content }),
+ signal,
+});&lt;/code&gt;&lt;/pre&gt;&lt;h3 class="heading-element" id="3-需要-abortsignal停止生成--切换会话"&gt;&lt;span&gt;3. 需要 AbortSignal：停止生成 / 切换会话&lt;/span&gt;
+ &lt;a href="#3-%e9%9c%80%e8%a6%81-abortsignal%e5%81%9c%e6%ad%a2%e7%94%9f%e6%88%90--%e5%88%87%e6%8d%a2%e4%bc%9a%e8%af%9d" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;用户点「停止」时要 &lt;strong&gt;abort 进行中的 fetch&lt;/strong&gt;，并配合服务端 cancel 接口。&lt;code&gt;EventSource&lt;/code&gt; 只有 &lt;code&gt;close()&lt;/code&gt;，与 &lt;code&gt;AbortController&lt;/code&gt; 生态不如 fetch 统一。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;const controller = new AbortController();
+await fetch(url, { signal: controller.signal, /* ... */ });
+// 用户点停止
+controller.abort();&lt;/code&gt;&lt;/pre&gt;&lt;h3 class="heading-element" id="4-事件类型不止一种tokentoolsourcesdone"&gt;&lt;span&gt;4. 事件类型不止一种：token、tool、sources、done&lt;/span&gt;
+ &lt;a href="#4-%e4%ba%8b%e4%bb%b6%e7%b1%bb%e5%9e%8b%e4%b8%8d%e6%ad%a2%e4%b8%80%e7%a7%8dtokentoolsourcesdone" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;LLM + Agent 场景下，一条流里常有多种事件：&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;event&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;含义&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;start&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;流 ID，用于取消&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;token&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;增量文本&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;sources&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;RAG 引用&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;tool_call&lt;/code&gt; / &lt;code&gt;tool_result&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Agent 工具调用&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;done&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;结束与 message_id&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;error&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;业务错误&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;code&gt;EventSource&lt;/code&gt; 默认按 &lt;code&gt;event:&lt;/code&gt; 字段分发，且长期用于「单一 message 流」。AI 项目里更常见的是 &lt;strong&gt;&lt;code&gt;data:&lt;/code&gt; 行内嵌 JSON&lt;/strong&gt;（&lt;code&gt;{&amp;quot;event&amp;quot;:&amp;quot;token&amp;quot;,...}&lt;/code&gt;），需要自行 &lt;code&gt;JSON.parse&lt;/code&gt; 与路由——用 ReadableStream 解析更可控。&lt;/p&gt;
+&lt;p&gt;示例（简化）：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;const reader = res.body!.getReader();
+const decoder = new TextDecoder();
+let buffer = &amp;#34;&amp;#34;;
+
+while (true) {
+ const { done, value } = await reader.read();
+ if (done) break;
+
+ buffer &amp;#43;= decoder.decode(value, { stream: true });
+ const blocks = buffer.split(&amp;#34;\n\n&amp;#34;);
+ buffer = blocks.pop() ?? &amp;#34;&amp;#34;;
+
+ for (const block of blocks) {
+ for (const line of block.split(&amp;#34;\n&amp;#34;)) {
+ if (!line.startsWith(&amp;#34;data:&amp;#34;)) continue;
+ const frame = JSON.parse(line.slice(5).trim());
+ if (frame.event === &amp;#34;token&amp;#34;) appendText(frame.data.content);
+ if (frame.event === &amp;#34;done&amp;#34;) onDone(frame.data);
+ }
+ }
+}&lt;/code&gt;&lt;/pre&gt;&lt;h3 class="heading-element" id="5-避免-eventsource-的自动重连误伤聊天"&gt;&lt;span&gt;5. 避免 EventSource 的「自动重连」误伤聊天&lt;/span&gt;
+ &lt;a href="#5-%e9%81%bf%e5%85%8d-eventsource-%e7%9a%84%e8%87%aa%e5%8a%a8%e9%87%8d%e8%bf%9e%e8%af%af%e4%bc%a4%e8%81%8a%e5%a4%a9" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;EventSource&lt;/code&gt; 断线后会&lt;strong&gt;自动重连&lt;/strong&gt;同一 URL。对通知流这是特性；对 &lt;strong&gt;一次性 completion 流&lt;/strong&gt;，重连可能导致重复消费、状态错乱。fetch 流由应用层控制生命周期，更符合「一次请求、一次回答」。&lt;/p&gt;
+&lt;h3 class="heading-element" id="6-bff--nextjs-route-handler-转发"&gt;&lt;span&gt;6. BFF / Next.js Route Handler 转发&lt;/span&gt;
+ &lt;a href="#6-bff--nextjs-route-handler-%e8%bd%ac%e5%8f%91" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;Next.js 聊天页常走 &lt;strong&gt;&lt;code&gt;/api/chat&lt;/code&gt; 代理&lt;/strong&gt; 到 FastAPI：Route Handler 用 &lt;code&gt;fetch&lt;/code&gt; 读上游 SSE，再转成 AI SDK 的 UI Message Stream。整条链路基于 &lt;strong&gt;Streams API&lt;/strong&gt; 管道化，而不是页面里挂一个 &lt;code&gt;EventSource&lt;/code&gt;。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;浏览器 fetch → Next.js Route Handler → FastAPI SSE
+ ReadableStream 转换 → 前端 useChat&lt;/code&gt;&lt;/pre&gt;&lt;h3 class="heading-element" id="7-错误响应要先于流处理401--422-json"&gt;&lt;span&gt;7. 错误响应要先于流处理（401 / 422 JSON）&lt;/span&gt;
+ &lt;a href="#7-%e9%94%99%e8%af%af%e5%93%8d%e5%ba%94%e8%a6%81%e5%85%88%e4%ba%8e%e6%b5%81%e5%a4%84%e7%90%86401--422-json" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;EventSource&lt;/code&gt; 在 HTTP 非 2xx 时走 &lt;code&gt;onerror&lt;/code&gt;，&lt;strong&gt;很难在「开流之前」读到 JSON 错误体&lt;/strong&gt;（如 token 过期、会话不存在、内容审核拦截）。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;fetch&lt;/code&gt; 可以先分支：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;const res = await fetch(url, { method: &amp;#34;POST&amp;#34;, /* ... */ });
+if (!res.ok) {
+ const err = await res.json(); // { code, message }
+ showToast(err.message);
+ return;
+}
+// 再 reader = res.body.getReader()&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;聊天产品里「鉴权失败 / 业务校验失败」很常见，这一路径用 fetch 更直接。&lt;/p&gt;
+&lt;h3 class="heading-element" id="8-跨域与-corseventsource-不能带自定义头"&gt;&lt;span&gt;8. 跨域与 CORS：EventSource 不能带自定义头&lt;/span&gt;
+ &lt;a href="#8-%e8%b7%a8%e5%9f%9f%e4%b8%8e-corseventsource-%e4%b8%8d%e8%83%bd%e5%b8%a6%e8%87%aa%e5%ae%9a%e4%b9%89%e5%a4%b4" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;跨域 SSE 若走 &lt;code&gt;EventSource&lt;/code&gt;，浏览器&lt;strong&gt;不会&lt;/strong&gt;让你加 &lt;code&gt;Authorization&lt;/code&gt;。常见变通是 Cookie 同源或 URL 里塞 token（又回到长度与泄露问题）。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;fetch&lt;/code&gt; 配合 CORS 预检（&lt;code&gt;OPTIONS&lt;/code&gt;），可以规范地发送 &lt;code&gt;Authorization&lt;/code&gt;、&lt;code&gt;Content-Type&lt;/code&gt; 等头，与现有 REST API 一致。&lt;/p&gt;
+&lt;h3 class="heading-element" id="9-自动重连会带-last-event-id"&gt;&lt;span&gt;9. 自动重连会带 &lt;code&gt;Last-Event-ID&lt;/code&gt;&lt;/span&gt;
+ &lt;a href="#9-%e8%87%aa%e5%8a%a8%e9%87%8d%e8%bf%9e%e4%bc%9a%e5%b8%a6-last-event-id" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;EventSource&lt;/code&gt; 断线重连时，浏览器可能自动带上 &lt;strong&gt;&lt;code&gt;Last-Event-ID&lt;/code&gt;&lt;/strong&gt;，希望服务端「从上次事件续传」。对&lt;strong&gt;通知订阅&lt;/strong&gt;合理；对 &lt;strong&gt;LLM 一次 completion&lt;/strong&gt; 可能让服务端误判为续流，产生重复 token 或状态不一致。fetch 流没有这一默认行为。&lt;/p&gt;
+&lt;h3 class="heading-element" id="10-同源连接数与多路并发"&gt;&lt;span&gt;10. 同源连接数与多路并发&lt;/span&gt;
+ &lt;a href="#10-%e5%90%8c%e6%ba%90%e8%bf%9e%e6%8e%a5%e6%95%b0%e4%b8%8e%e5%a4%9a%e8%b7%af%e5%b9%b6%e5%8f%91" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;在 &lt;strong&gt;HTTP/1.1&lt;/strong&gt; 下，浏览器对&lt;strong&gt;同一域名&lt;/strong&gt;的并发连接数有限（常为 &lt;strong&gt;6&lt;/strong&gt; 左右）。每个 &lt;code&gt;EventSource&lt;/code&gt; 占一条长连接；多 Tab、多会话同时流式时会和其它 API 请求&lt;strong&gt;抢连接&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;HTTP/2 多路复用后压力小一些，但 AI 客户端仍更倾向用 fetch 短生命周期流，并在应用层合并请求策略。&lt;/p&gt;
+&lt;h3 class="heading-element" id="11-响应头与可观测性"&gt;&lt;span&gt;11. 响应头与可观测性&lt;/span&gt;
+ &lt;a href="#11-%e5%93%8d%e5%ba%94%e5%a4%b4%e4%b8%8e%e5%8f%af%e8%a7%82%e6%b5%8b%e6%80%a7" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;fetch&lt;/code&gt; 在读完 body 前就能访问 &lt;strong&gt;&lt;code&gt;Response.headers&lt;/code&gt;&lt;/strong&gt;（如 &lt;code&gt;X-Request-Id&lt;/code&gt;、限流剩余次数、trace id），便于日志与排查。&lt;code&gt;EventSource&lt;/code&gt; 对响应头的暴露有限，不利于统一链路追踪。&lt;/p&gt;
+&lt;h2 class="heading-element" id="五fetch-流-vs-eventsource对照"&gt;&lt;span&gt;五、fetch 流 vs EventSource：对照&lt;/span&gt;
+ &lt;a href="#%e4%ba%94fetch-%e6%b5%81-vs-eventsource%e5%af%b9%e7%85%a7" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;能力&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;EventSource&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;fetch + ReadableStream&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;HTTP 方法&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;仅 GET&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;GET / POST / …&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;参数位置&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Query String（有** URL 长度**上限）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Request Body（通常 &lt;strong&gt;MB 级&lt;/strong&gt;）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;自定义 Header&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;不支持&lt;/strong&gt;（跨域鉴权受限）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;支持 &lt;code&gt;Authorization&lt;/code&gt; 等&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;Request Body&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;不支持&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;支持&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;AbortSignal&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;仅 &lt;code&gt;close()&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;原生 &lt;code&gt;signal&lt;/code&gt; + &lt;code&gt;AbortController&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;解析方式&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;浏览器解析 SSE&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;自行按 &lt;code&gt;\n\n&lt;/code&gt; / &lt;code&gt;data:&lt;/code&gt; 解析&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;自动重连&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;内置（带 &lt;strong&gt;Last-Event-ID&lt;/strong&gt;）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;自行决定（聊天通常不需要）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;非 2xx 响应&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;onerror&lt;/code&gt;，难读 JSON 错误体&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;可先 &lt;code&gt;res.ok&lt;/code&gt; 再 &lt;code&gt;res.json()&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;响应头&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;暴露有限&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;可读 &lt;code&gt;headers&lt;/code&gt;（trace / 限流）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;连接占用&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;长连接占同源连接配额&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;同为长连接，但生命周期由应用控制&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;strong&gt;结论&lt;/strong&gt;：Wire 格式可以仍是 SSE；&lt;strong&gt;传输层用 fetch 流&lt;/strong&gt;，是为了满足 POST、鉴权、取消与多事件协议，而不是否定 SSE 本身。&lt;/p&gt;
+&lt;h2 class="heading-element" id="六什么时候仍然可以用-eventsource"&gt;&lt;span&gt;六、什么时候仍然可以用 EventSource？&lt;/span&gt;
+ &lt;a href="#%e5%85%ad%e4%bb%80%e4%b9%88%e6%97%b6%e5%80%99%e4%bb%8d%e7%84%b6%e5%8f%af%e4%bb%a5%e7%94%a8-eventsource" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;以下场景 EventSource 依然合适：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;GET&lt;/strong&gt; 即可，且参数很短（远低于 URL 长度上限）&lt;/li&gt;
+&lt;li&gt;无需自定义 Header，或鉴权靠 Cookie 同源&lt;/li&gt;
+&lt;li&gt;单一 &lt;code&gt;message&lt;/code&gt; 事件，无复杂 JSON 协议&lt;/li&gt;
+&lt;li&gt;希望浏览器帮你做断线重连（通知、看板类订阅）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;AI Chat 产品若已走 POST + JWT + 长正文 body + 多事件 + 停止生成，&lt;strong&gt;fetch + ReadableStream 是更常见的工程选择&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 class="heading-element" id="七总结"&gt;&lt;span&gt;七、总结&lt;/span&gt;
+ &lt;a href="#%e4%b8%83%e6%80%bb%e7%bb%93" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;问题&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;简短回答&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;SSE 和 WebSocket 怎么选？&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;以&lt;strong&gt;服务端推、客户端收&lt;/strong&gt;为主（LLM 流式）→ SSE；&lt;strong&gt;高频双向&lt;/strong&gt; → WebSocket&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;为什么 LLM 常用 SSE？&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;单向流式、HTTP 生态、实现与运维成本低&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;为什么不用 EventSource？&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;GET 与 &lt;strong&gt;URL 长度&lt;/strong&gt;限制、POST body、Authorization、AbortSignal、多事件 JSON、错误 JSON、CORS、避免 Last-Event-ID 重连、BFF 转发等&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 class="heading-element" id="相关"&gt;&lt;span&gt;相关&lt;/span&gt;
+ &lt;a href="#%e7%9b%b8%e5%85%b3" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events" target="_blank" rel="external nofollow noopener noreferrer"&gt;MDN：Server-sent events&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream" target="_blank" rel="external nofollow noopener noreferrer"&gt;MDN：ReadableStream&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://developer.mozilla.org/en-US/docs/Web/API/EventSource" target="_blank" rel="external nofollow noopener noreferrer"&gt;MDN：EventSource&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description></item><item><title>Next.js 15 SEO 核心优化全解（AI 知识库项目实战向）</title><link>https://joesmile.github.io/nextjs-seo.html</link><pubDate>Sat, 30 May 2026 14:00:00 +0800</pubDate><guid>https://joesmile.github.io/nextjs-seo.html</guid><category domain="https://joesmile.github.io/categories/%E5%89%8D%E7%AB%AF--next.js/">前端 &amp; Next.js</category><description>&lt;p&gt;Next.js 是目前&lt;strong&gt;对 SEO 最友好的 React 全栈框架之一&lt;/strong&gt;。它从架构上缓解了传统纯 CSR（客户端渲染）SPA 的索引难题，并提供 Metadata API、Sitemap/Robots 约定式路由等工具链，特别适合&lt;strong&gt;文档站、知识库、AI 产品落地页&lt;/strong&gt;这类需要被搜索到的 App Router 项目。&lt;/p&gt;
 &lt;h2 class="heading-element" id="一核心优势从架构上缓解-spa-的-seo-痛点"&gt;&lt;span&gt;一、核心优势：从架构上缓解 SPA 的 SEO 痛点&lt;/span&gt;
  &lt;a href="#%e4%b8%80%e6%a0%b8%e5%bf%83%e4%bc%98%e5%8a%bf%e4%bb%8e%e6%9e%b6%e6%9e%84%e4%b8%8a%e7%bc%93%e8%a7%a3-spa-%e7%9a%84-seo-%e7%97%9b%e7%82%b9" class="heading-mark"&gt;
  &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
@@ -679,167 +2179,4 @@ demo传送门 &lt;a href="https://github.com/JoeSmile/hapi-confidence" target="_
 &lt;img loading="lazy" src='aem-test/Slide21.jpeg' alt="aem-test/Slide21.jpeg"&gt;
 &lt;img loading="lazy" src='aem-test/Slide22.jpeg' alt="aem-test/Slide22.jpeg"&gt;
 &lt;img loading="lazy" src='aem-test/Slide23.jpeg' alt="aem-test/Slide23.jpeg"&gt;
-&lt;img loading="lazy" src='aem-test/Slide24.jpeg' alt="aem-test/Slide24.jpeg"&gt;&lt;/p&gt;</description></item><item><title>koa-helmet</title><link>https://joesmile.github.io/koa-helmet.html</link><pubDate>Wed, 21 Aug 2019 14:45:45 +0800</pubDate><guid>https://joesmile.github.io/koa-helmet.html</guid><category domain="https://joesmile.github.io/categories/%E5%BD%92%E6%A1%A3/">归档</category><category domain="https://joesmile.github.io/categories/node/">Node</category><description>&lt;img src="https://joesmile.github.io/images/covers/helmet-cover.jpg" alt="featured image" referrerpolicy="no-referrer"&gt;&lt;p&gt;Koa-helmet 确保 koa 安全最强中间件！&lt;/p&gt;
-&lt;p&gt;官网: &lt;a href="https://helmetjs.github.io/" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://helmetjs.github.io/&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;无论前端还是后台，对安全都是极其重视的。前端同学在面试的时候常常被问到 XSS 黑客攻击手段。面试答案也很固定，其实安全防御的重点还是在服务器， koa-helmet 这个中间件能有效的防御 XSS 等攻击。这个中间件使用起来非常方便。Helmet 从14个方面守护着用户的安全，能抵挡大多数黑客攻击。本文简略的说明14种攻击类型，帮大家理解这个安全的中间件。&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='koa-helmet/helmet1.png' alt="koa-helmet/helmet1.png"&gt;&lt;/p&gt;
-&lt;p&gt;一: &lt;strong&gt;Content Security Policy（内容安全策略)&lt;/strong&gt;: 简称CSP，实质就是白名单制度，开发者明确告诉客户端，哪些外部资源可以加载和执行，等同于提供白名单。它的实现和执行全部由浏览器完成，开发者只需提供配置。&lt;/p&gt;
-&lt;p&gt;限制加载的类型及对应属性:&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='koa-helmet/helmet2.png' alt="koa-helmet/helmet2.png"&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;CSP对应关系图:&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='koa-helmet/helmet3.png' alt="koa-helmet/helmet3.png"&gt;&lt;/p&gt;
-&lt;h4 class="heading-element" id="配置方法"&gt;&lt;span&gt;配置方法:&lt;/span&gt;
- &lt;a href="#%e9%85%8d%e7%bd%ae%e6%96%b9%e6%b3%95" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;&lt;strong&gt;1.在http头中设置Content-Security-Policy字段&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='koa-helmet/helmet4.png' alt="koa-helmet/helmet4.png"&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;2.通过meta标签设置&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='koa-helmet/helmet5.png' alt="koa-helmet/helmet5.png"&gt;&lt;/p&gt;
-&lt;p&gt;更详细介绍请参考阮大神文章: &lt;a href="http://www.ruanyifeng.com/blog/2016/09/csp.html" target="_blank" rel="external nofollow noopener noreferrer"&gt;http://www.ruanyifeng.com/blog/2016/09/csp.html&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;二: &lt;strong&gt;crossdomain&lt;/strong&gt; 针对Adobe的&lt;/p&gt;
-&lt;p&gt;详细内容请看这里 &lt;a href="https://www.adobe.com/devnet/adobe-media-server/articles/cross-domain-xml-for-streaming.html" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.adobe.com/devnet/adobe-media-server/articles/cross-domain-xml-for-streaming.html&lt;/a&gt; 这个是用来确保 Flash player 从指定服务器的获取数据的安全等。&lt;/p&gt;
-&lt;p&gt;三: &lt;strong&gt;dnsPrefetchControl ✓&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;链接预取是一种浏览器机制，其利用浏览器空闲时间来下载或预取用户在不久的将来可能访问的文档。网页向浏览器提供一组预取提示，并在浏览器完成当前页面的加载后开始静默地拉取指定的文档并将其存储在缓存中。当用户访问其中一个预取文档时，便可以快速的从浏览器缓存中得到。虽然能起到一定的优化作用，但有用户可能泄漏自己的隐私信息。也有可能在用户不知情的情况下，偷偷自动访问另一个网站。&lt;/p&gt;
-&lt;p&gt;仅在 &lt;link rel='dns-prefetch' href='xxxxxx'/&gt; 生效。 此中间件默认关闭连接预取。&lt;/p&gt;
-&lt;p&gt;四: &lt;strong&gt;expectCt for handling Certificate Transparency&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;Expect-CT 头允许站点选择性报告和/或执行证书透明度 (Certificate Transparency) 要求，来防止错误签发的网站证书的使用不被察觉。当站点启用 Expect-CT 头，就是在请求浏览器检查该网站的任何证书是否出现在公共证书透明度日志之中。&lt;/p&gt;
-&lt;p&gt;五: &lt;strong&gt;featurePolicy to limit your site’s features&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;Feature-Policy 打开或者关闭一些浏览器设备功能，比如全屏，付款，摄像等功能。而且这个功能会在潜入的iframe的网站依然生效。好在目前支持此功能的浏览器不多。不过还是要小心。&lt;/p&gt;
-&lt;p&gt;六: &lt;strong&gt;frameguard to prevent clickjacking ✓&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;使用 frame 嵌套一个网站，通过各种手段诱使受害人点击已经是一个最简单的攻击手段。我们可以通过X-Frame-Options 来控制嵌套 iframe 的类型（同源网站／禁止嵌套／制定网站嵌套）&lt;/p&gt;
-&lt;p&gt;七: &lt;strong&gt;hidePoweredBy to remove the X-Powered-By header ✓&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;X-Powered-By&lt;/strong&gt; 用在服务器返回 http request 的 header 中，用来指明后台用的是什么技术。但这个正好可以被黑客用来确定服务器技术并选择攻击方式。此插件将这个字段抹去，来防止黑客轻易的获取服务器技术信息。&lt;/p&gt;
-&lt;p&gt;八: &lt;strong&gt;hpkp for HTTP Public Key Pinning&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;用来防范由「伪造或不正当手段获得网站证书」造成的中间人攻击&lt;/p&gt;
-&lt;p&gt;九: &lt;strong&gt;hsts for HTTP Strict Transport Security ✓&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;强制使用 https 协议访问当前资源。Https 相比 http 更安全。网站在http协议下更容易受到攻击。&lt;/p&gt;
-&lt;p&gt;十: &lt;strong&gt;ieNoOpen sets X-Download-Options for IE8+ ✓&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;禁止上传下载 html 文件／可执行文件。这个仅在低版本浏览器中有这个漏洞。&lt;/p&gt;
-&lt;p&gt;十一: &lt;strong&gt;noCache to disable client-side caching&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;防止用户拿到老版本的（有缺陷的）版本。&lt;/p&gt;
-&lt;p&gt;十二: &lt;strong&gt;noSniff to keep clients from sniffing the MIME type ✓&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;MIME sniff 原本是好意，浏览器会对文件进行嗅探，看看是否写错类型的是可执行文件。如果是照样执行。在上传和下载文件的时候，都会在header中表明文件类型（content-type），如: text/javascript, text/html等。但黑客会故意上传一个文件让浏览器自动下载执行。&lt;/p&gt;
-&lt;p&gt;十三: &lt;strong&gt;referrerPolicy to hide the Referer header&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;Referer header 会使网站知道用户是从哪里跳转而来。这也算用户隐私吧。&lt;/p&gt;
-&lt;p&gt;十四: &lt;strong&gt;xssFilter adds some small XSS protections ✓&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;这个令人头痛，网上85%的黑客攻击行为都是XSS攻击，相关知识就更多了，我们在另外的文章中对XSS展开讨论，这里就不赘述。&lt;/p&gt;
-&lt;p&gt;大家一起加油！&lt;/p&gt;</description></item><item><title>koa-jwt 全面解析，安检利器</title><link>https://joesmile.github.io/koa-jwt.html</link><pubDate>Wed, 21 Aug 2019 14:21:35 +0800</pubDate><guid>https://joesmile.github.io/koa-jwt.html</guid><category domain="https://joesmile.github.io/categories/%E5%BD%92%E6%A1%A3/">归档</category><category domain="https://joesmile.github.io/categories/node/">Node</category><description>&lt;img src="https://joesmile.github.io/images/covers/jwt-cover.png" alt="featured image" referrerpolicy="no-referrer"&gt;&lt;p&gt;学习 Koa 不易，今天学习到了 koa-jwt 这个登陆验证必不可少的中间件。本文会说明 jwt是什么、token怎么来的、如何验证token。&lt;/p&gt;
-&lt;p&gt;一反常态，先上代码！(本代码由 koa-generater 生成，安装 koa-jwt, jsonwebtoken 两个 npm 包 )&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;文件名: app.js&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='koa-jwt/jwt1.png' alt="koa-jwt/jwt1.png"&gt;&lt;/p&gt;
-&lt;p&gt;红色框：jwt 相关的代码&lt;/p&gt;
-&lt;p&gt;蓝色框：为了完成demo，在原有脚手架中做的调整。&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;文件名: routes/index.js&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='koa-jwt/jwt2.png' alt="koa-jwt/jwt2.png"&gt;&lt;/p&gt;
-&lt;p&gt;这里简单的模仿一个 login 请求，返回一个 token。&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;文件名: routes/users.js&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='koa-jwt/jwt3.0.png' alt="koa-jwt/jwt3.0.png"&gt;&lt;/p&gt;
-&lt;p&gt;users 以下的路由需通过 jwt 验证才能访问&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;文件名: auth.js&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='koa-jwt/jwt3.png' alt="koa-jwt/jwt3.png"&gt;&lt;/p&gt;
-&lt;hr&gt;
-&lt;h4 class="heading-element" id="思路及说明"&gt;&lt;span&gt;&lt;strong&gt;思路及说明：&lt;/strong&gt;&lt;/span&gt;
- &lt;a href="#%e6%80%9d%e8%b7%af%e5%8f%8a%e8%af%b4%e6%98%8e" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;1.我们在浏览器输入 &lt;a href="localhost:3000/login" target="_blank" rel="external nofollow noopener noreferrer"&gt;localhost:3000/login&lt;/a&gt; 获取 token。一下大串都是token，分为3部分，用 &amp;lsquo;.&amp;rsquo; 分隔；&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='koa-jwt/jwt4.png' alt="koa-jwt/jwt4.png"&gt;&lt;/p&gt;
-&lt;p&gt;2.这里用 postman 去访问 &lt;a href="localhost:3000/users/info" target="_blank" rel="external nofollow noopener noreferrer"&gt;localhost:3000/users/info&lt;/a&gt; 模拟访问用户数据。要在 header中加入 authorization, 注意：authorization的值的格式；&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='koa-jwt/jwt5.png' alt="koa-jwt/jwt5.png"&gt;&lt;/p&gt;
-&lt;p&gt;3.当输入 users 路由的时候 koa-jwt 不去验证 token 的正确性，仅仅去验证header中是否有 authorization 并且值为 &amp;lsquo;Bearer token&amp;rsquo;，然后再根据配置中 isRevoked 的函数去进行验证。isRevoked 返回 true 表明 token 不正确，false 表示 token 正确。&lt;/p&gt;
-&lt;p&gt;4.在验证中，使用 jsonwebtoken.verify 去验证 token 是否正确，并返回。&lt;/p&gt;
-&lt;hr&gt;
-&lt;h4 class="heading-element" id="api-解析"&gt;&lt;span&gt;&lt;strong&gt;API 解析：&lt;/strong&gt;&lt;/span&gt;
- &lt;a href="#api-%e8%a7%a3%e6%9e%90" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;Koa-jwt：这个函数还是截图看得清楚&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='koa-jwt/jwt6.png' alt="koa-jwt/jwt6.png"&gt;&lt;/p&gt;
-&lt;p&gt;1.&lt;strong&gt;secret&lt;/strong&gt;: 可以理解为一个加密因子，在生成 token 的时候用这个因子，验证 token 的时候也用同一个。Serect 可以是数组，当secret是一个数组时，在验证 token 时任何一个 因子通过验证，token就合法有效。&lt;/p&gt;
-&lt;p&gt;2.&lt;strong&gt;passthrough&lt;/strong&gt;: 当为true时，即使在 header 中没有 authorization 也会通过这个 中间件（仅仅通过中间件的验证，没有通过 jsonwebtoken.verify）&lt;/p&gt;
-&lt;p&gt;3.&lt;strong&gt;isRevoked&lt;/strong&gt;：需要一个函数来验证token的对错。这个函数有3个参数：ctx, decodedToken, token。其中 token 可以直接被验证： jsonwebtoken.verify(token)&lt;/p&gt;
-&lt;hr&gt;
-&lt;h4 class="heading-element" id="jsonwebtoken这个才是主角"&gt;&lt;span&gt;&lt;strong&gt;Jsonwebtoken:(这个才是主角！)&lt;/strong&gt;&lt;/span&gt;
- &lt;a href="#jsonwebtoken%e8%bf%99%e4%b8%aa%e6%89%8d%e6%98%af%e4%b8%bb%e8%a7%92" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;jsonwebtoken.sign(payload, secretOrPrivateKey, [options, callback]) 生成 token&lt;/p&gt;
-&lt;p&gt;1.&lt;strong&gt;payload&lt;/strong&gt; 是需要被加密的数据（我的理解 jwt其实就是加密解密和验证的过程）。在payload里有三个key很特别：iat（issued at）、exp（expiresIn）、nbf（notBefore），这几个参数推荐写在 options 中，不建议写在 payload 里；&lt;/p&gt;
-&lt;p&gt;2.&lt;strong&gt;secretOrPrivateKey&lt;/strong&gt; 可以是字符串，也可以是对成加密的 key，或者非对称加密的私有key；&lt;/p&gt;
-&lt;p&gt;3.&lt;strong&gt;options&lt;/strong&gt; 这里可以选择的参数就好多了，algorithms：加密算法，默认是HS256，expriesIn:token有效持续时间，notBefore: token在什么时候失效，更多参数请参考官网；&lt;/p&gt;
-&lt;p&gt;4.返回一个token。&lt;/p&gt;
-&lt;hr&gt;
-&lt;h4 class="heading-element" id="jwtverify"&gt;&lt;span&gt;&lt;strong&gt;jwt.verify&lt;/strong&gt;&lt;/span&gt;
- &lt;a href="#jwtverify" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;pre&gt;&lt;code&gt;jwt.verify(token, secretOrPublicKey, [options, callback])// 对token的验证&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;1.&lt;strong&gt;token&lt;/strong&gt;: 当然是用 sign 函数生成的token啦；&lt;/p&gt;
-&lt;p&gt;2.&lt;strong&gt;secretOrPublicKey&lt;/strong&gt;: 与生成 token 的加密因子相互对应，要么是相同的字符串和对称加密的key，或者是非对称加密的公有key；&lt;/p&gt;
-&lt;p&gt;3.&lt;strong&gt;options&lt;/strong&gt;: 与 sign 相互照应且要一致。audience，issuer，jwtid等。&lt;/p&gt;
-&lt;p&gt;4.正确的时候返回 payload，错误的时候throw 一个 err，里面包含了错误的message，根据message判断错误类型。&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='koa-jwt/jwt7.png' alt="koa-jwt/jwt7.png"&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;文档这里有个坑:&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;expiredIn&lt;/strong&gt;:默认单位是 &lt;strong&gt;秒！！！&lt;/strong&gt; 以下是铁证啊（jsonwebtoken/verify.js ，这里是用秒做的对比，千万别以为是毫秒&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='koa-jwt/jwt8.png' alt="koa-jwt/jwt8.png"&gt;&lt;/p&gt;
-&lt;blockquote&gt;
-&lt;p&gt;Tips: 通常情况下，我们也会在cookie里写一份token，这样每个请求都可以通过token验证，此时可以忽略 header中的autherization（passthrough: true）&lt;/p&gt;
-&lt;/blockquote&gt;</description></item><item><title>rich editor(富文本编辑器)</title><link>https://joesmile.github.io/richEditor.html</link><pubDate>Wed, 21 Aug 2019 12:27:10 +0800</pubDate><guid>https://joesmile.github.io/richEditor.html</guid><category domain="https://joesmile.github.io/categories/%E5%BD%92%E6%A1%A3/">归档</category><category domain="https://joesmile.github.io/categories/javascript/">Javascript</category><description>&lt;img src="https://joesmile.github.io/images/covers/xiaoxin.jpg" alt="featured image" referrerpolicy="no-referrer"&gt;&lt;p&gt;今天我们来介绍5个前端富文本编辑器&lt;/p&gt;
-&lt;h4 class="heading-element" id="1vue-quill-editor"&gt;&lt;span&gt;1.vue-quill-editor&lt;/span&gt;
- &lt;a href="#1vue-quill-editor" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;&lt;em&gt;地址：https://github.com/surmon-china/vue-quill-editor&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;这款富文本编辑器，能搞定 vue 的 SPA 和 SSR 富文本编辑问题。使用起来很方便。文档易懂，要深入了解就要详细的看看quill的文档了，和quill一样可以通过注册组件来扩展功能。不过quill目前的release版本是1.3.6，vue-quill-editor依赖的是1.3.4 部分扩展组建用起来可能会有隐藏的bug。如果想深入了解推荐看1.3.4版本的quill。目前的版本改动较大。不过，这款编辑器和quill一样，对table的支持不太友好。扩展quilljs-table有蛮多bug，全选删除会留下一行表格，怎么都删不掉，该起来源代码也不那么容易。如果需要用到table功能，不建议使用quill系列的编辑器。
-&lt;img loading="lazy" src='richEditor/quill1.png' alt="richEditor/quill1.png"&gt;&lt;/p&gt;
-&lt;hr&gt;
-&lt;h4 class="heading-element" id="2quill-近2万颗星星的-富文本编辑器"&gt;&lt;span&gt;2.Quill 近2万颗星星的 富文本编辑器&lt;/span&gt;
- &lt;a href="#2quill-%e8%bf%912%e4%b8%87%e9%a2%97%e6%98%9f%e6%98%9f%e7%9a%84-%e5%af%8c%e6%96%87%e6%9c%ac%e7%bc%96%e8%be%91%e5%99%a8" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;&lt;em&gt;地址：https://quilljs.com/&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;quill是vue-quill-editor的核心，功能强大，如果想自己更灵活的使用编辑器可以直接使用quill，封装成自己的组件。没的说，除了table其它都很棒。目前quill正在集成table的相关功能，预计很快就可以添上这个坑了。
-&lt;img loading="lazy" src='richEditor/quill2.png' alt="richEditor/quill2.png"&gt;&lt;/p&gt;
-&lt;hr&gt;
-&lt;h4 class="heading-element" id="3tinymce"&gt;&lt;span&gt;3.TinyMCE &lt;a href="https://www.tiny.cloud/" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.tiny.cloud/&lt;/a&gt;&lt;/span&gt;
- &lt;a href="#3tinymce" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;这款编辑器个人感觉比以上两款都要强大，很贴心的有两种模式。一个是普通模式，一个是inline模式。在inline模式中，在需要编辑时功能菜单可以浮动起来，在readonly时功能菜单隐藏。此编辑器对table友好（有没有很感动）。有些高级功能是需要付费的，详见官网。这个组件也有个小问题。场景：当插入图片后，把编辑的content保存起来，在其它&lt;div&gt;标签或者&lt;per&gt;标签内显示（非TinyMCE内）图片环绕着的文子会错位。这个很影响美观。不过从word 和 excel 复制粘贴过来的内容完全匹配。&lt;/p&gt;
-&lt;p&gt;line模式
-&lt;img loading="lazy" src='richEditor/quill3.png' alt="richEditor/quill3.png"&gt;&lt;/p&gt;
-&lt;hr&gt;
-&lt;h4 class="heading-element" id="4wangeditor-国产轻量级编辑器"&gt;&lt;span&gt;4.wangEditor 国产轻量级编辑器&lt;/span&gt;
- &lt;a href="#4wangeditor-%e5%9b%bd%e4%ba%a7%e8%bd%bb%e9%87%8f%e7%ba%a7%e7%bc%96%e8%be%91%e5%99%a8" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;使用起来很走心，很简单，中文文档详细 &lt;a href="https://www.kancloud.cn/wangfupeng/wangeditor3/332599" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.kancloud.cn/wangfupeng/wangeditor3/332599&lt;/a&gt; 学习成本较以上3个小了很多。table和图片处理都OK。近6000个star可以证明这款编辑器经过考验了。
-&lt;img loading="lazy" src='richEditor/quill4.png' alt="richEditor/quill4.png"&gt;&lt;/p&gt;
-&lt;hr&gt;
-&lt;h4 class="heading-element" id="5ueditor-百度编辑器符合国人习惯强大的无可挑剔"&gt;&lt;span&gt;5.UEditor 百度编辑器，符合国人习惯，强大的无可挑剔&lt;/span&gt;
- &lt;a href="#5ueditor-%e7%99%be%e5%ba%a6%e7%bc%96%e8%be%91%e5%99%a8%e7%ac%a6%e5%90%88%e5%9b%bd%e4%ba%ba%e4%b9%a0%e6%83%af%e5%bc%ba%e5%a4%a7%e7%9a%84%e6%97%a0%e5%8f%af%e6%8c%91%e5%89%94" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;&lt;em&gt;地址：http://fex.baidu.com/ueditor/#start-start&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='richEditor/quill5.png' alt="richEditor/quill5.png"&gt;
-看图！ 有木有和word一摸一样。能想到的功能基本都有了。本人在wordpress 用的就是这个款编辑器。UEditor可以支持前后端集成，支持php，jsp等。如果项目中需要非常专业的编辑功能，这个编辑器肯定是首选了！&lt;/p&gt;</description></item><item><title>vue key有个坑</title><link>https://joesmile.github.io/vue-key.html</link><pubDate>Wed, 21 Aug 2019 12:16:45 +0800</pubDate><guid>https://joesmile.github.io/vue-key.html</guid><category domain="https://joesmile.github.io/categories/%E5%BD%92%E6%A1%A3/">归档</category><description>&lt;p&gt;在vue2.x 中，我们经常使用key来提高组件性能，给了 input 或者 在 v-for 中 给子组件/元素一个 key 来加速diff渲染，这也是官方推荐的做法。不过 key 的赋值还真的不能马虎。&lt;/p&gt;
-&lt;h4 class="heading-element" id="案例1-无key的情况切换-input-无法自动清空"&gt;&lt;span&gt;案例1. 无key的情况，切换 input 无法自动清空&lt;/span&gt;
- &lt;a href="#%e6%a1%88%e4%be%8b1-%e6%97%a0key%e7%9a%84%e6%83%85%e5%86%b5%e5%88%87%e6%8d%a2-input-%e6%97%a0%e6%b3%95%e8%87%aa%e5%8a%a8%e6%b8%85%e7%a9%ba" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;在 input 不加 key 的时候，切换这两个 input 标签，input 框框里的值不会变
-&lt;img loading="lazy" src='vue-key/vuekey1.png' alt="vue-key/vuekey1.png"&gt;&lt;/p&gt;
-&lt;h4 class="heading-element" id="案例2-key相同tag标签多次出现在同一个页面"&gt;&lt;span&gt;案例2. key相同tag标签，多次出现在同一个页面&lt;/span&gt;
- &lt;a href="#%e6%a1%88%e4%be%8b2-key%e7%9b%b8%e5%90%8ctag%e6%a0%87%e7%ad%be%e5%a4%9a%e6%ac%a1%e5%87%ba%e7%8e%b0%e5%9c%a8%e5%90%8c%e4%b8%80%e4%b8%aa%e9%a1%b5%e9%9d%a2" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;这个bug很少见，但见了后会很头疼。通常我们使用key 偷懒的情况使用index来做key，&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;&amp;lt;div v-for=&amp;#34;(item, index) in list&amp;#34; :key=&amp;#34;index&amp;#34; /&amp;gt;&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;这样的key写多了，又同时进行渲染，在来个排序什么的，就很容易出现bug。最好 key + 时间戳 或者 使用唯一的key标示。&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;总结： key 要唯一 ！要唯一！要唯一!&lt;/strong&gt;&lt;/p&gt;
-&lt;hr&gt;
-&lt;p&gt;另外一个渲染 input radio 显示不正确的问题&lt;/p&gt;
-&lt;p&gt;&lt;img loading="lazy" src='vue-key/vuekey2.png' alt="vue-key/vuekey2.png"&gt;&lt;/p&gt;
-&lt;p&gt;在以上代码，原本想点击Add one 渲染多个inputRadio 组件，从而进行Yes or No的选择。但以上有2个错误。&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;错误1. 在组件内部 id 不唯一。 在多次进行inputRadio时候会渲染多个id为yes 和 no的input组件。从而使label总绑定到第一个input上。&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;错误2. 在input中使用name时候，名字一样， 导致多次渲染inputRadio时候无法准确定位input。&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;正确代码可以将 id 和 name 加上时间戳编程唯一的 id / name。&lt;/p&gt;</description></item></channel></rss>
+&lt;img loading="lazy" src='aem-test/Slide24.jpeg' alt="aem-test/Slide24.jpeg"&gt;&lt;/p&gt;</description></item></channel></rss>
