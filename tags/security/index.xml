@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Security - 标签 - JoeSmile</title><link>https://joesmile.github.io/tags/security/</link><description>Joe 的技术博客 — AI Agent应用全链路工程实践</description><generator>Hugo 0.163.2 &amp; FixIt v0.4.5</generator><language>zh-CN</language><lastBuildDate>Sun, 14 Jun 2026 10:00:00 +0800</lastBuildDate><atom:link href="https://joesmile.github.io/tags/security/index.xml" rel="self" type="application/rss+xml"/><item><title>LLM 聊天与 RAG 安全怎么落地？纵深防御、快失败与第三方 Guard 选型</title><link>https://joesmile.github.io/chat-security.html</link><pubDate>Sun, 14 Jun 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/chat-security.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;说明&lt;/strong&gt;：下文描述的是 RAG 聊天场景的&lt;strong&gt;安全设计思路与行业通用做法&lt;/strong&gt;，并非某套系统的生产配置、规则明细或现网能力承诺。具体阈值、开关策略、Prompt 原文与检测规则属于运维细节，&lt;strong&gt;不在公开文中披露&lt;/strong&gt;。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;做 AI 聊天应用时，安全往往被排在「能跑起来」之后。但真正上线后，&lt;strong&gt;Prompt 注入&lt;/strong&gt;、&lt;strong&gt;RAG 间接注入&lt;/strong&gt;、&lt;strong&gt;工具链滥用&lt;/strong&gt;和&lt;strong&gt;成本失控&lt;/strong&gt;会一起找上门。最近在 MemoryOS 里梳理聊天/RAG 安全方案，把内部工程文档整理成一篇可发布的总结，方便对照和迭代。&lt;/p&gt;
+&lt;p&gt;核心结论先说：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;快失败&lt;/strong&gt;：在调用 LLM &lt;strong&gt;之前&lt;/strong&gt;用廉价检查拒绝或清洗，而不是先让攻击进模型再反应。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;纵深防御&lt;/strong&gt;：用户输入、知识库 chunk、Prompt 结构、限流配额，多层叠加，不指望单一银弹。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;自研规则做底座&lt;/strong&gt;，第三方 Guard 经 &lt;strong&gt;Adapter + 配置开关&lt;/strong&gt; 按需叠加；CI 与本地开发应能走不依赖 GPU 的轻量路径。&lt;/li&gt;
+&lt;/ol&gt;</description></item></channel></rss>
