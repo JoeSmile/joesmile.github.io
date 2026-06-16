@@ -1,4 +1,696 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>JoeSmile</title><link>https://joesmile.github.io/</link><description>Joe 的技术博客 — AI Agent应用全链路工程实践</description><generator>Hugo 0.163.2 &amp; FixIt v0.4.5</generator><language>zh-CN</language><lastBuildDate>Sun, 14 Jun 2026 10:00:00 +0800</lastBuildDate><atom:link href="https://joesmile.github.io/index.xml" rel="self" type="application/rss+xml"/><item><title>LLM 聊天与 RAG 安全怎么落地？纵深防御、快失败与第三方 Guard 选型</title><link>https://joesmile.github.io/chat-security.html</link><pubDate>Sun, 14 Jun 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/chat-security.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;blockquote&gt;
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>JoeSmile</title><link>https://joesmile.github.io/</link><description>Joe 的技术博客 — AI Agent应用全链路工程实践</description><generator>Hugo 0.163.2 &amp; FixIt v0.4.5</generator><language>zh-CN</language><lastBuildDate>Tue, 16 Jun 2026 10:00:00 +0800</lastBuildDate><atom:link href="https://joesmile.github.io/index.xml" rel="self" type="application/rss+xml"/><item><title>MemoryOS 聊天安全一张图：分层、时序与防护总表</title><link>https://joesmile.github.io/memoryos-security-map.html</link><pubDate>Tue, 16 Jun 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/memoryos-security-map.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;说明&lt;/strong&gt;：本文是 MemoryOS &lt;strong&gt;聊天 / RAG 安全实现对照&lt;/strong&gt;，与 &lt;a href="https://joesmile.github.io/chat-security.html"&gt;《LLM 聊天与 RAG 安全怎么落地》&lt;/a&gt; 互补——那一篇讲方法论，本篇讲&lt;strong&gt;本系统在哪一层、用什么包、防什么、还缺什么&lt;/strong&gt;。&lt;br&gt;
+&lt;strong&gt;回顾顺序&lt;/strong&gt;：第二节总表 → 第三节分层图 → 第四节时序图&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 class="heading-element" id="一防护总表主索引"&gt;&lt;span&gt;一、防护总表（主索引）&lt;/span&gt;
+ &lt;a href="#%e4%b8%80%e9%98%b2%e6%8a%a4%e6%80%bb%e8%a1%a8%e4%b8%bb%e7%b4%a2%e5%bc%95" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;下表为全文核心：&lt;strong&gt;防护模块名 = 业务称呼（第三方包 / 自研模块 / 规划组件）&lt;/strong&gt;。&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;流量分层&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;防护模块（包 / 代码）&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;精确部署位置&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;执行时机&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;实现方案&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;抵御攻击&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;设计理由&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;优先级&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;依赖成本&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;短板&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;配套互补&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;风险提示&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;1. 前端 / BFF（可绕过）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;BFF Guard&lt;/strong&gt;（&lt;a href="https://www.npmjs.com/package/llm-prompt-guard" target="_blank" rel="external nofollow noopener noreferrer"&gt;&lt;code&gt;llm-prompt-guard&lt;/code&gt;&lt;/a&gt; · &lt;code&gt;apps/web/lib/prompt-guard.ts&lt;/code&gt;）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Next BFF：&lt;code&gt;app/api/chat/**&lt;/code&gt; 转发 API 前&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;用户点发送，body 未到 FastAPI&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;createGuard().sanitize&lt;/code&gt;；&lt;code&gt;tag&lt;/code&gt; 仅标记转发 / &lt;code&gt;quarantine&lt;/code&gt; 高危英文 422&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;直白英文 / 中文基础 Prompt 注入；简单角色劫持句式；少量带空格换行拆分的简易越狱指令；无编码、无字符变形的基础攻击载荷&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;早反馈、减无效 API 请求；&lt;strong&gt;非权威&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;P2&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;npm 零后端依赖&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;直连 API 完全绕过&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;llm-injection-guard&lt;/code&gt; 中间件、&lt;code&gt;prompt_security&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;不可作唯一注入防护&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;2. API 网关层&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;滑动窗口限流&lt;/strong&gt;（规划 · Redis 自研 · &lt;code&gt;rate_limit.py&lt;/code&gt;）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;统一入口：&lt;code&gt;/auth/login&lt;/code&gt;、&lt;code&gt;/chat/completions&lt;/code&gt;、&lt;code&gt;/demo-turn&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;HTTP 进入、鉴权&lt;strong&gt;之前&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Redis 滑动窗口 → &lt;code&gt;429&lt;/code&gt; &lt;code&gt;code=42901&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;HTTP 层 DoS；高频批量刷对话；恶意脚本短时间大量新建会话；批量长对话消耗 GPU / 算力；恶意批量请求拉高服务成本&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;注入防住仍可能被高频烧算力&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;P0&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Redis 计数&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;慢速低频渗透注入&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Token 日配额、&lt;code&gt;audit_log&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;全路由强制，无豁免&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;2. API 网关层&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;HTTP 注入中间件&lt;/strong&gt;（&lt;a href="https://pypi.org/project/llm-injection-guard/" target="_blank" rel="external nofollow noopener noreferrer"&gt;&lt;code&gt;llm-injection-guard&lt;/code&gt;&lt;/a&gt; · &lt;code&gt;middleware/injection_guard.py&lt;/code&gt; + &lt;code&gt;llm_injection_guard_adapter.py&lt;/code&gt;）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;FastAPI &lt;code&gt;InjectionGuardMiddleware&lt;/code&gt;；仅 &lt;code&gt;POST /api/v1/chat/completions&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Body 解析后、路由 handler &lt;strong&gt;之前&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;PromptScanner&lt;/code&gt;（包内规则引擎，非自研正则）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;中英文指令覆盖 / 角色劫持；Base64 / 十六进制 / URL 编码伪装注入；零宽空格、RTL 方向控制隐形字符绕过；伪造 &lt;code&gt;&amp;lt;system&amp;gt;&lt;/code&gt; 分隔标签；长换行填充稀释系统规则；基础 RAG 埋毒短句载荷&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;服务端第一层统一校验，弥补 BFF 可绕过&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;P0&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;纯内存 + 轻量 pip&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;多语种语义诱导、字符变体&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;prompt_security&lt;/code&gt;、&lt;code&gt;llm-guard&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;所有 chat 请求必经；与启发式对照实验&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;2. API 网关层&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;JWT 会话鉴权&lt;/strong&gt;（&lt;a href="https://pyjwt.readthedocs.io/" target="_blank" rel="external nofollow noopener noreferrer"&gt;&lt;code&gt;PyJWT&lt;/code&gt;&lt;/a&gt; · &lt;code&gt;core/deps.py&lt;/code&gt; &lt;code&gt;get_current_user&lt;/code&gt;）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;全部受保护路由 &lt;code&gt;Depends(get_current_user)&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;限流 / 中间件之后&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;JWT 校验 + &lt;code&gt;get_owned_conversation&lt;/code&gt; owner 绑定&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;窃取 Token 越权访问他人对话；未登录调用受保护聊天接口；篡改会话归属读取他人知识库；盗用他人账号批量发起对话&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;隔离用户数据边界&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;P0&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;内存解析；会话 PG&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;不防注入、DoS&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;限流、审计&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;公开 demo 路由单独降级&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;3. 业务预处理层&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;长度 + 启发式清洗&lt;/strong&gt;（自研 · &lt;code&gt;content_validator.py&lt;/code&gt; + &lt;code&gt;prompt_security.py&lt;/code&gt; + &lt;code&gt;injection_patterns.py&lt;/code&gt;；编排 &lt;code&gt;user_input_guard.py&lt;/code&gt;）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;ChatService.prepare_completion_turn&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;进 LangGraph &lt;strong&gt;之前&lt;/strong&gt;；&lt;code&gt;regenerate&lt;/code&gt; 另校验 DB 末条 user&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;CHAT_MAX_CONTENT_CHARS&lt;/code&gt; 截断拒绝；EN/ZH override 短语 → 422 &lt;code&gt;prompt_injection_detected&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;上万字符超长文本淹没顶层 System 规则；中英文标准忽略 / 无视类劫持句式；分段拆分的多层叠加注入；基础全角字母汉字变形攻击；直白诱导泄露配置、系统提示词的恶意提问&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;权威&lt;/strong&gt;业务层硬拦截&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;P0&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;纯字符串 / 正则&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;变形字符、小语种语义诱导&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;llm-guard&lt;/code&gt;、&lt;code&gt;llm-injection-guard&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;所有 LLM 对话统一经 &lt;code&gt;prepare_completion_turn&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;3. 业务预处理层&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;LLM-Guard ML 语义检测&lt;/strong&gt;（&lt;a href="https://github.com/protectai/llm-guard" target="_blank" rel="external nofollow noopener noreferrer"&gt;&lt;code&gt;llm-guard&lt;/code&gt;&lt;/a&gt; · &lt;code&gt;llm_guard_adapter.py&lt;/code&gt;）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;user_input_guard&lt;/code&gt; 链尾部（启发式之后）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;构造 Prompt 前&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;PromptInjection&lt;/code&gt; + &lt;code&gt;InvisibleText&lt;/code&gt; scanners&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;日韩 / 泰 / 越等小语种注入；同义词改写、转述类诱导越狱；长篇故事叙事式隐性劫持；花体 / 下标 / 数学兼容字符变体绕过正则；无明显关键词纯语义诱导；混合多语言拼接注入载荷&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;补正则固定句式短板&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;P3&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;可选 pip + HF/Torch，延迟↑&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;极简单字符注入（上层已拦）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;prompt_security&lt;/code&gt;、DeSyntax&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;性能敏感可关；高安全环境再开&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;4. RAG 全链路层&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;RAG 双点清洗&lt;/strong&gt;（自研 · &lt;code&gt;rag_sanitizer.py&lt;/code&gt;）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;① &lt;code&gt;knowledge_ingest_service&lt;/code&gt; ETL 入库 ② &lt;code&gt;graphs/nodes/retrieve.py&lt;/code&gt; 检索后&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;入向量库前；拼进 &lt;code&gt;&amp;lt;DOCS&amp;gt;&lt;/code&gt; 前&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;NFKC、控制字符、劫持短语 neutralize、&lt;code&gt;RAG_CHUNK_MAX_CHARS&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;知识库文档预埋劫持指令间接注入；文档内嵌零宽隐形字符伪装攻击；超长分片稀释模型安全规则；全角 / Unicode 兼容字符埋毒；文档内伪造系统区块标签污染上下文&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;源头净化 + 漏网二次清洗&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;P1&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;纯字符串&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;完整祈使句法埋毒&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;entropyshield&lt;/code&gt;、&lt;code&gt;content_provenance&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;ETL + retrieve &lt;strong&gt;同一模块&lt;/strong&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;5. Tools / 外源层&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;来源信任 + DeSyntax&lt;/strong&gt;（自研 &lt;code&gt;content_provenance.py&lt;/code&gt; + &lt;a href="https://pypi.org/project/entropyshield/" target="_blank" rel="external nofollow noopener noreferrer"&gt;&lt;code&gt;entropyshield&lt;/code&gt;&lt;/a&gt; · &lt;code&gt;entropyshield_adapter.py&lt;/code&gt;）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;tavily_search.py&lt;/code&gt; snippet 出口；&lt;code&gt;crawler-*&lt;/code&gt; collection retrieve&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;外源数据进 RAG 链&lt;strong&gt;之前&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;worldcup-*&lt;/code&gt; → &lt;code&gt;TRUSTED_ETL&lt;/code&gt; 跳过；&lt;code&gt;WEB_SEARCH&lt;/code&gt; / &lt;code&gt;CRAWLER&lt;/code&gt; → &lt;code&gt;shield_text_for_provenance&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;爬虫、联网搜索结果预埋埋毒指令；外网不可信来源祈使句劫持；多语种外网文档间接注入；完整动词-宾语命令句法链攻击；低信任数据源拼接绕过内层正则过滤&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;外网不可信；破碎指令句法&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;P1&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;可选 pip；纯算法&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;纯语义类&lt;strong&gt;用户&lt;/strong&gt;输入攻击&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;rag_sanitizer&lt;/code&gt;、&lt;code&gt;llm-guard&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;仅内网可信库可关 DeSyntax&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;6. LLM 模型层&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;Prompt 分区隔离&lt;/strong&gt;（自研模板 · &lt;code&gt;graphs/prompts/rag_chat.py&lt;/code&gt;、&lt;code&gt;unified_react.py&lt;/code&gt; · &lt;code&gt;call_model.py&lt;/code&gt;）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;每次 &lt;code&gt;call_model&lt;/code&gt; 拼 &lt;code&gt;SystemMessage&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;调 Ollama / OpenAI 兼容 API 前&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;&amp;lt;POLICY&amp;gt;&lt;/code&gt; + &lt;code&gt;&amp;lt;DOCS&amp;gt;&lt;/code&gt; + &lt;code&gt;&amp;lt;TOOL_POLICY&amp;gt;&lt;/code&gt;；用户仅 &lt;code&gt;HumanMessage&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;用户 / 文档内容伪造 System 分区边界；把 RAG 检索资料、工具返回内容识别为顶层系统指令；多轮对话上下文拼接混淆规则优先级；区块标签篡改引发角色劫持&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;多层漏检时模型侧软兜底&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;P0&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;模板拼接&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;不防输出泄露 system&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;输出扫描、PII 脱敏&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;分区规则不在前端暴露&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;7. LLM 输出后置层&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;输出扫描 / canary&lt;/strong&gt;（规划 · &lt;a href="https://github.com/protectai/llm-guard" target="_blank" rel="external nofollow noopener noreferrer"&gt;&lt;code&gt;llm-guard&lt;/code&gt;&lt;/a&gt; output scanners + 自研 canary）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;ChatService&lt;/code&gt; finalize 或流式拼接完成点&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;模型生成结束、落库 / SSE 结束前&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Output scanners；敏感形态正则；XSS 转义（FE）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;system 泄露、密钥外带、PII、XSS&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;只防输入不够&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;P2&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;可选 HF 模型&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;不防输入侧注入&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Prompt 分区、&lt;code&gt;audit_log&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;流式宜分段校验&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;8. 计费管控层&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;Token 日配额&lt;/strong&gt;（规划 · &lt;code&gt;token_usage&lt;/code&gt; 表 + &lt;code&gt;token_quota_service.py&lt;/code&gt;）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;chat&lt;/code&gt; 流式 finalize&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;单次对话完成统计 usage&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;按 &lt;code&gt;user_id&lt;/code&gt; + UTC 日聚合 → &lt;code&gt;429&lt;/code&gt; &lt;code&gt;code=42902&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;恶意构造超长篇对话疯狂消耗 token；单人单日无限次长对话拉高云账单；批量生成高上下文会话耗尽算力额度；低频但单轮超大 token 滥用成本&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;限流管次数，配额管 token 总量&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;P0&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Redis / PG&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;不防注入、越权&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;网关限流、审计&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;测试 / 生产阈值分离&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;9. 审计追溯层&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;安全审计日志&lt;/strong&gt;（规划 · &lt;code&gt;audit_log&lt;/code&gt; 表 · &lt;code&gt;rate-limit-audit.md&lt;/code&gt;）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;login 失败、demo-turn、敏感删改 handler&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;敏感操作同步写入&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;PG &lt;code&gt;audit_log&lt;/code&gt;：user、action、摘要、风险标记&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;事后追溯、合规取证&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;防护失效时复盘攻击路径&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;P0&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;DB IO 轻微&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;仅事后，不实时阻断&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;全模块埋点&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;合规硬性要求&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;10. CI 离线层&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;Harness 契约测试&lt;/strong&gt;（pytest · &lt;code&gt;tests/harness/test_chat_security_contract.py&lt;/code&gt;）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;PR / &lt;code&gt;pnpm test:api:harness&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;合并前 CI&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;正例足球问 + 合成注入 → 断言 422 / 200&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;迭代修改清洗规则后防护逻辑退化；接口入参变更绕过注入拦截；业务代码重构导致安全校验分支丢失；基础注入用例回归失效、契约校验漂移&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;比 Garak 轻、PR 必跑&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;P1&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;PG 测试库&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;不覆盖全量载荷&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Garak、单元测试&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;不能替代运行时多层防护&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;10. CI 离线层&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;Garak 红队探针&lt;/strong&gt;（&lt;a href="https://github.com/NVIDIA/garak" target="_blank" rel="external nofollow noopener noreferrer"&gt;&lt;code&gt;garak&lt;/code&gt;&lt;/a&gt; · &lt;code&gt;scripts/security/garak_probe.sh&lt;/code&gt; · &lt;code&gt;pnpm security:garak&lt;/code&gt;）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;nightly / 发版前手动&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;非运行时&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;garak_memoryos.yaml&lt;/code&gt;；可选 &lt;code&gt;garak_rest_chat.json&lt;/code&gt; 打 live API&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;迭代新增功能产生新型注入漏洞；正则 / 语义检测器漏检未知对抗载荷；多层防护组合存在串联绕过漏洞；线上真实流量无法覆盖的边缘攻击样本；OWASP LLM Top10 全类风险自动化扫描&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;线上流量覆盖不了的全量样本&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;P2&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;CI 算力；不占线上&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;不防实时 0day&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Harness、Rubric（规划）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;离线验证，不替代运行时&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 class="heading-element" id="规划扩展尚未接入备忘"&gt;&lt;span&gt;规划扩展（尚未接入，备忘）&lt;/span&gt;
+ &lt;a href="#%e8%a7%84%e5%88%92%e6%89%a9%e5%b1%95%e5%b0%9a%e6%9c%aa%e6%8e%a5%e5%85%a5%e5%a4%87%e5%bf%98" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;组件&lt;/th&gt;
+					&lt;th&gt;预期位置&lt;/th&gt;
+					&lt;th&gt;用途&lt;/th&gt;
+					&lt;th&gt;优先级&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;IngressProfile&lt;/strong&gt;（EP13）&lt;/td&gt;
+					&lt;td&gt;BFF + API 共用配置&lt;/td&gt;
+					&lt;td&gt;按 Agent / 路由分 Guard 策略，替代粗粒度全局 env&lt;/td&gt;
+					&lt;td&gt;P3&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;Lakera Guard&lt;/strong&gt;（云 API）&lt;/td&gt;
+					&lt;td&gt;API 输入链&lt;/td&gt;
+					&lt;td&gt;高检出托管检测；有预算再评估&lt;/td&gt;
+					&lt;td&gt;P3&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;边缘 WAF&lt;/strong&gt;（CDN / Gateway）&lt;/td&gt;
+					&lt;td&gt;公网入口&lt;/td&gt;
+					&lt;td&gt;大规模 L3–L7 流量清洗&lt;/td&gt;
+					&lt;td&gt;P3&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;strong&gt;日志脱敏&lt;/strong&gt;（LangSmith / app log）&lt;/td&gt;
+					&lt;td&gt;观测链路&lt;/td&gt;
+					&lt;td&gt;PII 采样与字段掩码&lt;/td&gt;
+					&lt;td&gt;P3&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 class="heading-element" id="包名与自研模块对照速查"&gt;&lt;span&gt;包名与自研模块对照（速查）&lt;/span&gt;
+ &lt;a href="#%e5%8c%85%e5%90%8d%e4%b8%8e%e8%87%aa%e7%a0%94%e6%a8%a1%e5%9d%97%e5%af%b9%e7%85%a7%e9%80%9f%e6%9f%a5" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;业务称呼&lt;/th&gt;
+					&lt;th&gt;第三方包（pip / npm）&lt;/th&gt;
+					&lt;th&gt;自研代码入口&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;BFF Guard&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;llm-prompt-guard&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;apps/web/lib/prompt-guard.ts&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;HTTP 注入中间件&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;llm-injection-guard&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;middleware/injection_guard.py&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;权威启发式&lt;/td&gt;
+					&lt;td&gt;—&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;prompt_security.py&lt;/code&gt; · &lt;code&gt;user_input_guard.py&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;ML 输入扫描&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;llm-guard&lt;/code&gt;（optional extra）&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;llm_guard_adapter.py&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;RAG 清洗&lt;/td&gt;
+					&lt;td&gt;—&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;rag_sanitizer.py&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;外源 DeSyntax&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;entropyshield&lt;/code&gt;（optional）&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;content_provenance.py&lt;/code&gt; · &lt;code&gt;entropyshield_adapter.py&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;Prompt 分区&lt;/td&gt;
+					&lt;td&gt;—&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;rag_chat.py&lt;/code&gt; · &lt;code&gt;call_model.py&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;红队&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;garak&lt;/code&gt;（optional）&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;scripts/security/garak_probe.sh&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="二分层架构图"&gt;&lt;span&gt;二、分层架构图&lt;/span&gt;
+ &lt;a href="#%e4%ba%8c%e5%88%86%e5%b1%82%e6%9e%b6%e6%9e%84%e5%9b%be" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;节点命名与主表一致：&lt;strong&gt;业务模块 · 方法 / 部署点&lt;/strong&gt;（同一 &lt;code&gt;rag_sanitizer.py&lt;/code&gt; 在两个时机各调一个函数，不是两个独立组件）。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;flowchart TB
+ subgraph edge[&amp;#34;1 · BFF 可绕过&amp;#34;]
+ BFF[&amp;#34;BFF Guard&amp;lt;br/&amp;gt;llm-prompt-guard · evaluateBffPromptGuard&amp;#34;]
+ end
+
+ subgraph ingress[&amp;#34;2 · API 网关&amp;#34;]
+ RL[&amp;#34;滑动窗口限流 🔲&amp;lt;br/&amp;gt;rate_limit.py&amp;#34;]
+ MW[&amp;#34;HTTP 注入中间件&amp;lt;br/&amp;gt;llm-injection-guard · PromptScanner&amp;#34;]
+ AUTH[&amp;#34;JWT 会话鉴权&amp;lt;br/&amp;gt;PyJWT · get_current_user&amp;#34;]
+ end
+
+ subgraph prep[&amp;#34;3 · 业务预处理&amp;#34;]
+ LEN[&amp;#34;长度限制&amp;lt;br/&amp;gt;content_validator.assert_chat_content_length&amp;#34;]
+ HEU[&amp;#34;启发式清洗&amp;lt;br/&amp;gt;prompt_security.assert_user_input_safe&amp;#34;]
+ ML[&amp;#34;ML 语义检测 可选&amp;lt;br/&amp;gt;llm-guard · scan_prompt&amp;#34;]
+ end
+
+ subgraph rag4[&amp;#34;4 · RAG 双点清洗 · rag_sanitizer.py&amp;#34;]
+ P1[&amp;#34;① 入库点&amp;lt;br/&amp;gt;sanitize_chunk&amp;lt;br/&amp;gt;knowledge_ingest_service&amp;#34;]
+ P2[&amp;#34;② 检索点&amp;lt;br/&amp;gt;sanitize_retrieved_knowledge_chunk&amp;lt;br/&amp;gt;retrieve_knowledge&amp;#34;]
+ end
+
+ subgraph ext5[&amp;#34;5 · Tools / 外源&amp;#34;]
+ PROV[&amp;#34;来源信任 &amp;#43; DeSyntax&amp;lt;br/&amp;gt;content_provenance.shield_text_for_provenance&amp;lt;br/&amp;gt;entropyshield_adapter 低信任&amp;#34;]
+ TAV[&amp;#34;tools/tavily_search&amp;lt;br/&amp;gt;snippet · WEB_SEARCH provenance_shield&amp;#34;]
+ end
+
+ subgraph llm6[&amp;#34;6 · LLM&amp;#34;]
+ POL[&amp;#34;Prompt 分区&amp;lt;br/&amp;gt;build_rag_system_message&amp;lt;br/&amp;gt;POLICY / DOCS / TOOL_POLICY&amp;#34;]
+ LLM[&amp;#34;LLM / Agent Tools&amp;#34;]
+ end
+
+ OUT[&amp;#34;7 · 输出扫描 🔲&amp;lt;br/&amp;gt;llm-guard output&amp;#34;]
+ QUOTA[&amp;#34;8 · Token 配额 🔲&amp;lt;br/&amp;gt;token_usage&amp;#34;]
+ AUD[&amp;#34;9 · audit_log 🔲&amp;#34;]
+ CI[&amp;#34;10 · CI 离线&amp;lt;br/&amp;gt;Harness · garak&amp;#34;]
+
+ BFF --&amp;gt; RL
+ RL --&amp;gt; MW --&amp;gt; AUTH --&amp;gt; prep
+ prep --&amp;gt; P2
+ P1 -.-&amp;gt;|离线 ETL 先入向量库| P2
+ P2 --&amp;gt; PROV
+ PROV --&amp;gt; POL
+ TAV -.-&amp;gt;|Agent 联网回灌| POL
+ POL --&amp;gt; LLM --&amp;gt; OUT
+ LLM --&amp;gt; QUOTA
+ AUTH -.-&amp;gt; AUD
+ CI -.-&amp;gt; prep&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;&lt;strong&gt;读图提示&lt;/strong&gt;&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;图上节点&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;对应主表行&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;说明&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;① &lt;code&gt;sanitize_chunk&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;RAG 双点清洗&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;仅 &lt;strong&gt;ETL 入库&lt;/strong&gt;；运行时 Chat 不经过此节点&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;② &lt;code&gt;sanitize_retrieved_knowledge_chunk&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;RAG 双点清洗&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;retrieve 后&lt;/strong&gt;进 &lt;code&gt;&amp;lt;DOCS&amp;gt;&lt;/code&gt; 前；内部会再调 &lt;code&gt;shield_text_for_provenance&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;content_provenance&lt;/code&gt; + &lt;code&gt;entropyshield&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;来源信任 + DeSyntax&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;② 与 tools 共用；&lt;code&gt;worldcup-*&lt;/code&gt; 可信源跳过 DeSyntax&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;tools/tavily_search&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;来源信任 + DeSyntax&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;_format_tavily_response&lt;/code&gt; 对每个 snippet 调 &lt;code&gt;shield_text_for_provenance(WEB_SEARCH)&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="三时序图"&gt;&lt;span&gt;三、时序图&lt;/span&gt;
+ &lt;a href="#%e4%b8%89%e6%97%b6%e5%ba%8f%e5%9b%be" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="31-主路径chat--正常放行"&gt;&lt;span&gt;3.1 主路径（Chat · 正常放行）&lt;/span&gt;
+ &lt;a href="#31-%e4%b8%bb%e8%b7%af%e5%be%84chat--%e6%ad%a3%e5%b8%b8%e6%94%be%e8%a1%8c" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;主路径前提：&lt;strong&gt;BFF 未开&lt;/strong&gt;，或 &lt;strong&gt;BFF 开且 &lt;code&gt;mode=tag&lt;/code&gt;&lt;/strong&gt;（仅扫描标记后转发）。&lt;code&gt;quarantine&lt;/code&gt; 命中会在 BFF 直接 422，不进 API，见 3.2。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sequenceDiagram
+ autonumber
+ actor U as 用户
+ participant B as BFF prompt-guard.ts
+ participant A as FastAPI
+ participant M as llm-injection-guard
+ participant P as prepare_completion_turn
+ participant G as LangGraph
+ participant R as retrieve_knowledge
+ participant C as call_model
+ participant L as LLM
+
+ U-&amp;gt;&amp;gt;B: app/api/chat/route.ts
+ alt BFF_PROMPT_GUARD_ENABLED=false（默认）
+ B-&amp;gt;&amp;gt;B: evaluateBffPromptGuard → forward
+ else mode=tag
+ B-&amp;gt;&amp;gt;B: createGuard().sanitize(mode: tag)
+ Note over B: 仅标记可疑，原文转发 API
+ end
+ B-&amp;gt;&amp;gt;A: POST /api/v1/chat/completions
+
+ opt 限流（规划 rate_limit.py）
+ A-&amp;gt;&amp;gt;A: Redis 滑动窗口
+ end
+
+ A-&amp;gt;&amp;gt;M: InjectionGuardMiddleware
+ M-&amp;gt;&amp;gt;M: PromptScanner.scan(content)
+ M-&amp;gt;&amp;gt;A: 放行
+
+ A-&amp;gt;&amp;gt;A: get_current_user (PyJWT)
+ A-&amp;gt;&amp;gt;A: get_owned_conversation
+
+ A-&amp;gt;&amp;gt;P: ChatService.prepare_completion_turn
+ P-&amp;gt;&amp;gt;P: assert_chat_content_length
+ P-&amp;gt;&amp;gt;P: run_user_input_guards
+ Note over P: prompt_security.assert_user_input_safe
+ opt LLM_GUARD_ENABLED
+ P-&amp;gt;&amp;gt;P: llm_guard_adapter.scan_prompt
+ end
+ P-&amp;gt;&amp;gt;G: turn_lock · 落库 user message
+
+ G-&amp;gt;&amp;gt;R: retrieve_knowledge
+ R-&amp;gt;&amp;gt;R: KnowledgeSearchService.search
+ R-&amp;gt;&amp;gt;R: rag_sanitizer.sanitize_retrieved_knowledge_chunk
+ Note over R: 内含 content_provenance.shield_text_for_provenance&amp;lt;br/&amp;gt;低信任时 entropyshield_adapter
+
+ G-&amp;gt;&amp;gt;C: call_model
+ C-&amp;gt;&amp;gt;C: build_rag_system_message&amp;lt;br/&amp;gt;POLICY &amp;#43; DOCS &amp;#43; TOOL_POLICY
+ C-&amp;gt;&amp;gt;L: ChatOpenAI.stream
+
+ L--&amp;gt;&amp;gt;G: token chunks
+ G--&amp;gt;&amp;gt;B: SSE
+ B--&amp;gt;&amp;gt;U: 展示回复
+
+ opt finalize（规划 token_usage）
+ G-&amp;gt;&amp;gt;G: UsageRecorder 日累计
+ end&lt;/code&gt;&lt;/pre&gt;&lt;h3 class="heading-element" id="32-拒绝路径注入--任一层-422"&gt;&lt;span&gt;3.2 拒绝路径（注入 · 任一层 422）&lt;/span&gt;
+ &lt;a href="#32-%e6%8b%92%e7%bb%9d%e8%b7%af%e5%be%84%e6%b3%a8%e5%85%a5--%e4%bb%bb%e4%b8%80%e5%b1%82-422" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;与 3.1 同一请求，但在 &lt;strong&gt;BFF / HTTP 中间件 / prepare&lt;/strong&gt; 任一处被拦。三层互斥递进，不是并行扫描。&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;拦截层&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;主表模块&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;方法&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;响应&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;BFF（仅 quarantine）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;BFF Guard · &lt;code&gt;llm-prompt-guard&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;evaluateBffPromptGuard&lt;/code&gt; → &lt;code&gt;sanitize(mode: block)&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;422 &lt;code&gt;prompt_injection_detected&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;API 入口&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;HTTP 注入中间件 · &lt;code&gt;llm-injection-guard&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;assert_llm_injection_guard_user_input&lt;/code&gt; → &lt;code&gt;PromptScanner.scan&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;422 &lt;code&gt;prompt_injection_detected&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;业务预处理&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;长度 + 启发式 · 自研&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;assert_chat_content_length&lt;/code&gt; / &lt;code&gt;assert_user_input_safe&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;422 &lt;code&gt;content_too_long&lt;/code&gt; 或 &lt;code&gt;prompt_injection_detected&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;业务预处理（可选）&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;LLM-Guard · &lt;code&gt;llm-guard&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;llm_guard_adapter.scan_prompt&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;422 &lt;code&gt;prompt_injection_detected&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;pre&gt;&lt;code&gt;sequenceDiagram
+ autonumber
+ actor U as 用户
+ participant B as BFF prompt-guard.ts
+ participant A as FastAPI
+ participant M as llm-injection-guard
+ participant P as prepare_completion_turn
+
+ U-&amp;gt;&amp;gt;B: app/api/chat/route.ts · 注入载荷
+
+ alt BFF 开 &amp;#43; mode=quarantine
+ B-&amp;gt;&amp;gt;B: evaluateBffPromptGuard
+ B-&amp;gt;&amp;gt;B: llm-prompt-guard.sanitize(mode: block)
+ Note over B: wasBlocked → reject
+ B--&amp;gt;&amp;gt;U: 42201 prompt_injection_detected
+ Note over B,A: 不转发 API
+ else BFF 关 或 mode=tag
+ B-&amp;gt;&amp;gt;B: forward（tag 仅标记，不拦截）
+ B-&amp;gt;&amp;gt;A: POST /api/v1/chat/completions
+
+ A-&amp;gt;&amp;gt;M: InjectionGuardMiddleware
+ M-&amp;gt;&amp;gt;M: llm_injection_guard_adapter&amp;lt;br/&amp;gt;.assert_llm_injection_guard_user_input
+ M-&amp;gt;&amp;gt;M: PromptScanner.scan(content)
+
+ alt PromptScanner 命中
+ M--&amp;gt;&amp;gt;U: 42201 prompt_injection_detected
+ Note over M,P: 不进 prepare_completion_turn
+ else 中间件放行
+ A-&amp;gt;&amp;gt;A: get_current_user · get_owned_conversation
+ A-&amp;gt;&amp;gt;P: ChatService.prepare_completion_turn
+
+ P-&amp;gt;&amp;gt;P: content_validator.assert_chat_content_length
+ alt 超长
+ P--&amp;gt;&amp;gt;U: 42201 content_too_long
+ else 长度通过
+ P-&amp;gt;&amp;gt;P: user_input_guard.run_user_input_guards
+ P-&amp;gt;&amp;gt;P: prompt_security.assert_user_input_safe
+ opt LLM_GUARD_ENABLED
+ P-&amp;gt;&amp;gt;P: llm_guard_adapter.scan_prompt
+ end
+ alt 启发式 / ML 命中
+ P--&amp;gt;&amp;gt;U: 42201 prompt_injection_detected
+ Note over P: 不进 LangGraph
+ end
+ end
+ end
+ end&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;&lt;strong&gt;读图提示&lt;/strong&gt;：&lt;code&gt;mode=tag&lt;/code&gt; 时 BFF &lt;strong&gt;不会&lt;/strong&gt; 422，拒绝发生在 API 侧；直连 API（绕过 BFF）时从第 11 步 &lt;code&gt;InjectionGuardMiddleware&lt;/code&gt; 起判。&lt;/p&gt;
+&lt;h3 class="heading-element" id="33-离线路径ci--非运行时"&gt;&lt;span&gt;3.3 离线路径（CI · 非运行时）&lt;/span&gt;
+ &lt;a href="#33-%e7%a6%bb%e7%ba%bf%e8%b7%af%e5%be%84ci--%e9%9d%9e%e8%bf%90%e8%a1%8c%e6%97%b6" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;与 3.1 / 3.2 热路径无关；对应主表 &lt;strong&gt;Harness 契约测试&lt;/strong&gt;、&lt;strong&gt;Garak 红队探针&lt;/strong&gt; 两行。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sequenceDiagram
+ autonumber
+ participant CI as CI / 开发者
+ participant H as Harness 契约
+ participant A as FastAPI test client
+ participant G as Garak 红队
+
+ CI-&amp;gt;&amp;gt;H: pnpm test:api:harness
+ H-&amp;gt;&amp;gt;H: pytest tests/harness/test_chat_security_contract.py
+
+ H-&amp;gt;&amp;gt;A: test_chat_football_analysis_passes_injection_filter
+ Note over A: 正例足球问句 → 200 SSE start
+ A--&amp;gt;&amp;gt;H: assert 200 · event=start
+
+ H-&amp;gt;&amp;gt;A: test_chat_rejects_prompt_injection_before_stream
+ Note over A: 反例 ignore previous instructions…
+ A-&amp;gt;&amp;gt;A: InjectionGuardMiddleware · PromptScanner
+ Note over A: 或 prepare · assert_user_input_safe
+ A--&amp;gt;&amp;gt;H: assert 42201 prompt_injection_detected&amp;lt;br/&amp;gt;messages 未落库
+
+ opt GARAK_PROBE_ENABLED=true（默认关 · nightly）
+ CI-&amp;gt;&amp;gt;G: pnpm security:garak
+ G-&amp;gt;&amp;gt;G: scripts/security/garak_probe.sh
+ G-&amp;gt;&amp;gt;G: garak --config garak_memoryos.yaml&amp;lt;br/&amp;gt;probe_spec: promptinject
+ opt GARAK_TARGET_TYPE=rest
+ G-&amp;gt;&amp;gt;A: garak_rest_chat.json · live API
+ else mock（默认）
+ G-&amp;gt;&amp;gt;G: 离线 mock target 冒烟
+ end
+ G--&amp;gt;&amp;gt;CI: 报告落盘 .garak/reports&amp;lt;br/&amp;gt;exit 0 非阻塞
+ end&lt;/code&gt;&lt;/pre&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;步骤&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;主表模块&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;包 / 脚本&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;说明&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;Harness PR 门禁&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Harness 契约测试&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;test_chat_security_contract.py&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;正例 + 反例；&lt;strong&gt;合并前必跑&lt;/strong&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;Garak nightly&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Garak 红队探针&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;garak&lt;/code&gt; · &lt;code&gt;garak_probe.sh&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;全量探针回归；&lt;strong&gt;默认关&lt;/strong&gt;，失败不挡 PR&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="四chat-vs-demo-路径"&gt;&lt;span&gt;四、Chat vs Demo 路径&lt;/span&gt;
+ &lt;a href="#%e5%9b%9bchat-vs-demo-%e8%b7%af%e5%be%84" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;路径&lt;/th&gt;
+					&lt;th&gt;用户自由文本&lt;/th&gt;
+					&lt;th&gt;BFF &lt;code&gt;llm-prompt-guard&lt;/code&gt;&lt;/th&gt;
+					&lt;th&gt;API 注入链&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;Chat&lt;/td&gt;
+					&lt;td&gt;是&lt;/td&gt;
+					&lt;td&gt;可选&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;llm-injection-guard&lt;/code&gt; + &lt;code&gt;prompt_security&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;Demo 分析按钮&lt;/td&gt;
+					&lt;td&gt;否（服务端模板）&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;否&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;仅参数 / 长度，不扫自由文本&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="五落地顺序从总表提炼"&gt;&lt;span&gt;五、落地顺序（从总表提炼）&lt;/span&gt;
+ &lt;a href="#%e4%ba%94%e8%90%bd%e5%9c%b0%e9%a1%ba%e5%ba%8f%e4%bb%8e%e6%80%bb%e8%a1%a8%e6%8f%90%e7%82%bc" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;P0 🔲&lt;/strong&gt;：限流 + Token 配额 + 审计（滥用三角，与注入正交）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;P1&lt;/strong&gt;：RAG 双点 ✅；外源链路生产开 &lt;code&gt;ENTROPYSHIELD_ENABLED&lt;/code&gt;；Harness 保持 PR 门禁&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;P2&lt;/strong&gt;：BFF 按需开；输出扫描；Garak live API 模板&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;P3&lt;/strong&gt;：&lt;code&gt;LLM_GUARD_ENABLED&lt;/code&gt;；IngressProfile / 云 Guard / WAF&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="六小结"&gt;&lt;span&gt;六、小结&lt;/span&gt;
+ &lt;a href="#%e5%85%ad%e5%b0%8f%e7%bb%93" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;问题&lt;/th&gt;
+					&lt;th&gt;结论&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;信息太分散？&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;以第一节总表为唯一主索引&lt;/strong&gt;；图与时序是总表的视图。&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;命名对不上包？&lt;/td&gt;
+					&lt;td&gt;总表「防护模块」列已写 &lt;strong&gt;npm/pip 包名 + 仓库路径&lt;/strong&gt;。&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;还没做的写哪？&lt;/td&gt;
+					&lt;td&gt;模块名标「规划」；见「规划扩展」与第五节落地顺序。&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 class="heading-element" id="参考"&gt;&lt;span&gt;参考&lt;/span&gt;
+ &lt;a href="#%e5%8f%82%e8%80%83" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;工程文档：&lt;code&gt;memoryOS/docs/tech/chat-security.md&lt;/code&gt;、&lt;code&gt;rate-limit-audit.md&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;姊妹文：&lt;a href="https://joesmile.github.io/chat-security.html"&gt;LLM 聊天与 RAG 安全怎么落地？&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description></item><item><title>LLM 聊天与 RAG 安全怎么落地？纵深防御、快失败与第三方 Guard 选型</title><link>https://joesmile.github.io/chat-security.html</link><pubDate>Sun, 14 Jun 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/chat-security.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;blockquote&gt;
 &lt;p&gt;&lt;strong&gt;说明&lt;/strong&gt;：下文描述的是 RAG 聊天场景的&lt;strong&gt;安全设计思路与行业通用做法&lt;/strong&gt;，并非某套系统的生产配置、规则明细或现网能力承诺。具体阈值、开关策略、Prompt 原文与检测规则属于运维细节，&lt;strong&gt;不在公开文中披露&lt;/strong&gt;。&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;p&gt;做 AI 聊天应用时，安全往往被排在「能跑起来」之后。但真正上线后，&lt;strong&gt;Prompt 注入&lt;/strong&gt;、&lt;strong&gt;RAG 间接注入&lt;/strong&gt;、&lt;strong&gt;工具链滥用&lt;/strong&gt;和&lt;strong&gt;成本失控&lt;/strong&gt;会一起找上门。最近在 MemoryOS 里梳理聊天/RAG 安全方案，把内部工程文档整理成一篇可发布的总结，方便对照和迭代。&lt;/p&gt;
@@ -2577,106 +3269,4 @@ module.exports = {
 &lt;/h3&gt;&lt;p&gt;这里有一个 hapi 小型脚手架，包含confidence插件， Glue插件等，练手好demo！&lt;br&gt;
 demo传送门 &lt;a href="https://github.com/JoeSmile/hapi-confidence" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://github.com/JoeSmile/hapi-confidence&lt;/a&gt;&lt;/p&gt;</description></item><item><title>angular_relevant_links</title><link>https://joesmile.github.io/angular-relevant-links.html</link><pubDate>Tue, 10 Sep 2019 10:10:33 +0800</pubDate><guid>https://joesmile.github.io/angular-relevant-links.html</guid><category domain="https://joesmile.github.io/categories/%E5%BD%92%E6%A1%A3/">归档</category><description>&lt;p&gt;&lt;strong&gt;Angular CI commands&lt;/strong&gt;
 &lt;a href="https://www.jianshu.com/p/67acdd21f89c" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.jianshu.com/p/67acdd21f89c&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://www.jianshu.com/p/981418077f89" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.jianshu.com/p/981418077f89&lt;/a&gt;&lt;/p&gt;</description></item><item><title>参考资料</title><link>https://joesmile.github.io/useful-tools-website.html</link><pubDate>Thu, 22 Aug 2019 17:00:00 +0800</pubDate><guid>https://joesmile.github.io/useful-tools-website.html</guid><category domain="https://joesmile.github.io/categories/%E5%BD%92%E6%A1%A3/">归档</category><category domain="https://joesmile.github.io/categories/tools/">Tools</category><description>&lt;img src="https://joesmile.github.io/images/js.png" alt="featured image" referrerpolicy="no-referrer"&gt;&lt;h3 class="heading-element" id="知识精讲"&gt;&lt;span&gt;知识精讲&lt;/span&gt;
- &lt;a href="#%e7%9f%a5%e8%af%86%e7%b2%be%e8%ae%b2" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Pro git&lt;/strong&gt;
-&lt;a href="http://iissnan.com/progit" target="_blank" rel="external nofollow noopener noreferrer"&gt;http://iissnan.com/progit&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;算法&lt;/strong&gt;
-&lt;a href="https://juejin.im/post/5d5b307b5188253da24d3cd1" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://juejin.im/post/5d5b307b5188253da24d3cd1&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;HTTP 缓存&lt;/strong&gt;
-&lt;a href="https://juejin.im/post/5a1d4e546fb9a0450f21af23" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://juejin.im/post/5a1d4e546fb9a0450f21af23&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;原型链&amp;amp;继承&lt;/strong&gt;
-&lt;a href="https://juejin.im/post/5a1d4e546fb9a0450f21af23" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://juejin.im/post/5a1d4e546fb9a0450f21af23&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;this全面解析&lt;/strong&gt;
-&lt;a href="https://juejin.im/post/5c96d0c751882511c832ff7b" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://juejin.im/post/5c96d0c751882511c832ff7b&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;CSS 进阶&lt;/strong&gt;
-&lt;a href="https://juejin.im/post/5d31338b6fb9a07eb74b7629" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://juejin.im/post/5d31338b6fb9a07eb74b7629&lt;/a&gt;
-&lt;a href="https://juejin.im/post/5d3eca78e51d4561cb5dde12" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://juejin.im/post/5d3eca78e51d4561cb5dde12&lt;/a&gt;
-&lt;a href="https://juejin.im/post/5d4d0ec651882549594e7293" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://juejin.im/post/5d4d0ec651882549594e7293&lt;/a&gt;&lt;/p&gt;
-&lt;h3 class="heading-element" id="全家桶--大集合"&gt;&lt;span&gt;全家桶 &amp;amp; 大集合&lt;/span&gt;
- &lt;a href="#%e5%85%a8%e5%ae%b6%e6%a1%b6--%e5%a4%a7%e9%9b%86%e5%90%88" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;全家福: 各大语言、框架技术传送门&lt;/strong&gt;
-&lt;a href="https://devdocs.io/" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://devdocs.io/&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;一本前端雀语小册:&lt;/strong&gt;
-&lt;a href="https://www.yuque.com/robinson/fe-guide" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.yuque.com/robinson/fe-guide&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;笔耕不辍的作者真心让人佩服&lt;/strong&gt;
-&lt;a href="https://www.muyiy.cn/blog/" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.muyiy.cn/blog/&lt;/a&gt;&lt;/p&gt;
-&lt;h3 class="heading-element" id="面试题系列"&gt;&lt;span&gt;面试题系列&lt;/span&gt;
- &lt;a href="#%e9%9d%a2%e8%af%95%e9%a2%98%e7%b3%bb%e5%88%97" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;各种语言的面试题大全&lt;/strong&gt;
-&lt;a href="https://www.javatpoint.com/javascript-interview-questions" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.javatpoint.com/javascript-interview-questions&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;细心的小姐姐总结的很全面的面试题&lt;/strong&gt;
-&lt;a href="https://github.com/YvetteLau/Blog" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://github.com/YvetteLau/Blog&lt;/a&gt;
-&lt;a href="https://juejin.im/post/5c92f499f265da612647b754" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://juejin.im/post/5c92f499f265da612647b754&lt;/a&gt;
-&lt;a href="https://juejin.im/post/5cdcc009e51d453afb40d87c" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://juejin.im/post/5cdcc009e51d453afb40d87c&lt;/a&gt;
-&lt;a href="https://juejin.im/post/5c64d15d6fb9a049d37f9c20" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://juejin.im/post/5c64d15d6fb9a049d37f9c20&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;前端博客现在流行 git book&lt;/strong&gt;
-&lt;a href="https://leohxj.gitbooks.io/front-end-database/interview/interview-exercises-with-JavaScript.html" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://leohxj.gitbooks.io/front-end-database/interview/interview-exercises-with-JavaScript.html&lt;/a&gt;
-&lt;strong&gt;面试题小书&lt;/strong&gt;
-&lt;a href="https://fe.padding.me" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://fe.padding.me&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;经典笔试题&lt;/strong&gt;
-&lt;a href="https://leetcode.com/problemset/top-interview-questions/" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://leetcode.com/problemset/top-interview-questions/&lt;/a&gt;&lt;/p&gt;
-&lt;h3 class="heading-element" id="扩展"&gt;&lt;span&gt;扩展&lt;/span&gt;
- &lt;a href="#%e6%89%a9%e5%b1%95" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;ES6词法规范&lt;/strong&gt;
-&lt;a href="http://zhoushengfe.com/es6/es6-ch.html" target="_blank" rel="external nofollow noopener noreferrer"&gt;http://zhoushengfe.com/es6/es6-ch.html&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;目前看到过最好的一片关于ES词法规范的博客&lt;/strong&gt;
-&lt;a href="https://segmentfault.com/a/1190000012162360#articleHeader1" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://segmentfault.com/a/1190000012162360#articleHeader1&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;前端算法题目&lt;/strong&gt;
-&lt;a href="http://obkoro1.com/web_accumulate/algorithm/" target="_blank" rel="external nofollow noopener noreferrer"&gt;http://obkoro1.com/web_accumulate/algorithm/&lt;/a&gt;&lt;/p&gt;
-&lt;h3 class="heading-element" id="工具"&gt;&lt;span&gt;工具&lt;/span&gt;
- &lt;a href="#%e5%b7%a5%e5%85%b7" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;CICD&lt;/strong&gt;
-&lt;strong&gt;Jenkins 中文文档&lt;/strong&gt;
-&lt;a href="https://www.w3cschool.cn/jenkins/jenkins-jg9528pb.html" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.w3cschool.cn/jenkins/jenkins-jg9528pb.html&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Gitlab CI&lt;/strong&gt;
-&lt;em&gt;个人感觉 gitlab CI 比 jenkins 更好上手&lt;/em&gt;
-&lt;a href="https://www.jianshu.com/p/3c0cbb6c2936" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.jianshu.com/p/3c0cbb6c2936&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Jenkins VS Gitlab CI&lt;/strong&gt;
-&lt;em&gt;这样对比 gitlab CI 完胜&lt;/em&gt;
-&lt;a href="https://about.gitlab.com/devops-tools/jenkins-vs-gitlab.html" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://about.gitlab.com/devops-tools/jenkins-vs-gitlab.html&lt;/a&gt;&lt;/p&gt;
-&lt;h3 class="heading-element" id="tips"&gt;&lt;span&gt;Tips&lt;/span&gt;
- &lt;a href="#tips" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;直接取得当前时间毫秒数&lt;/strong&gt;&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;var t1 = &amp;#43;new Date();&lt;/code&gt;&lt;/pre&gt;&lt;h3 class="heading-element" id="在线绘图工具"&gt;&lt;span&gt;在线绘图工具&lt;/span&gt;
- &lt;a href="#%e5%9c%a8%e7%ba%bf%e7%bb%98%e5%9b%be%e5%b7%a5%e5%85%b7" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;流程图&lt;br&gt;
-&lt;a href="https://app.creately.com" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://app.creately.com&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;UE + 流程图
-&lt;a href="https://www.gomockingbird.com/" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.gomockingbird.com/&lt;/a&gt;
-&lt;a href="https://www.processon.com" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.processon.com&lt;/a&gt;&lt;/p&gt;
-&lt;h3 class="heading-element" id="to-read"&gt;&lt;span&gt;To Read&lt;/span&gt;
- &lt;a href="#to-read" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;lerna&lt;br&gt;
-&lt;a href="https://github.com/lerna/lerna#getting-started" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://github.com/lerna/lerna#getting-started&lt;/a&gt;
-&lt;a href="https://juejin.im/post/5a989fb451882555731b88c2" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://juejin.im/post/5a989fb451882555731b88c2&lt;/a&gt;
-&lt;a href="https://juejin.im/post/5c7491cae51d457fc564d6ee" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://juejin.im/post/5c7491cae51d457fc564d6ee&lt;/a&gt;
-&lt;a href="https://juejin.im/post/5ced1609e51d455d850d3a6c" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://juejin.im/post/5ced1609e51d455d850d3a6c&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;lodash 原型污染&lt;br&gt;
-&lt;a href="https://juejin.im/post/5d271332f265da1b934e2d48" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://juejin.im/post/5d271332f265da1b934e2d48&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;Typescript enhancer&lt;br&gt;
-&lt;a href="http://definitelytyped.org/" target="_blank" rel="external nofollow noopener noreferrer"&gt;http://definitelytyped.org/&lt;/a&gt;&lt;br&gt;
-&lt;a href="https://github.com/DefinitelyTyped/DefinitelyTyped" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://github.com/DefinitelyTyped/DefinitelyTyped&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;standrad&lt;br&gt;
-&lt;a href="https://github.com/standard" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://github.com/standard&lt;/a&gt;
-&lt;a href="https://standardjs.com/" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://standardjs.com/&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;ES6 pro&lt;br&gt;
-&lt;a href="http://es6.ruanyifeng.com/?search=%E6%A8%A1%E7%89%88&amp;amp;x=0&amp;amp;y=0" target="_blank" rel="external nofollow noopener noreferrer"&gt;http://es6.ruanyifeng.com/?search=%E6%A8%A1%E7%89%88&amp;x=0&amp;y=0&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;##配色原理##
-&lt;a href="https://www.uisdc.com/color-design-reading-notes-1" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.uisdc.com/color-design-reading-notes-1&lt;/a&gt;&lt;/p&gt;</description></item></channel></rss>
+&lt;p&gt;&lt;a href="https://www.jianshu.com/p/981418077f89" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.jianshu.com/p/981418077f89&lt;/a&gt;&lt;/p&gt;</description></item></channel></rss>
