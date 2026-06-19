@@ -1,4 +1,426 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>JoeSmile</title><link>https://joesmile.github.io/</link><description>Joe 的技术博客 — AI Agent应用全链路工程实践</description><generator>Hugo 0.163.2 &amp; FixIt v0.4.5</generator><language>zh-CN</language><lastBuildDate>Tue, 16 Jun 2026 10:00:00 +0800</lastBuildDate><atom:link href="https://joesmile.github.io/index.xml" rel="self" type="application/rss+xml"/><item><title>MemoryOS 聊天安全一张图：分层、时序与防护总表</title><link>https://joesmile.github.io/memoryos-security-map.html</link><pubDate>Tue, 16 Jun 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/memoryos-security-map.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;blockquote&gt;
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>JoeSmile</title><link>https://joesmile.github.io/</link><description>Joe 的技术博客 — AI Agent应用全链路工程实践</description><generator>Hugo 0.163.3 &amp; FixIt v0.4.5</generator><language>zh-CN</language><lastBuildDate>Fri, 19 Jun 2026 10:00:00 +0800</lastBuildDate><atom:link href="https://joesmile.github.io/index.xml" rel="self" type="application/rss+xml"/><item><title>BFF 背压：为什么 Chat 流式不能「中转站一次扛完」</title><link>https://joesmile.github.io/bff-stream-backpressure.html</link><pubDate>Fri, 19 Jun 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/bff-stream-backpressure.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;说明&lt;/strong&gt;：下文来自 MemoryOS Chat 流式链路的一次真实「假死」排查。后端连接池、中间件等问题见姊妹篇 &lt;a href="https://joesmile.github.io/shit-fastapi-depend-redis.html"&gt;Chat SSE 假死：FastAPI Depends 占死连接池&lt;/a&gt;；本文只讲 &lt;strong&gt;BFF 与浏览器之间&lt;/strong&gt; 为什么要做背压、怎么做、为什么不能全扔给前端。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;用户问：「2022 世界杯射手榜前 10 名」。终端里 SQL 已经 &lt;code&gt;COMMIT&lt;/code&gt;，刷新页面却能看到完整回答——聊天框却停在「正在生成…」，只吐出几个字，甚至最后 &lt;code&gt;network error&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;这不是 LLM 没算完，是 &lt;strong&gt;管道某一截憋住了&lt;/strong&gt;。其中很大一块，出在 &lt;strong&gt;Next.js BFF 怎么读 FastAPI、又怎么喂给浏览器&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 class="heading-element" id="一先忘掉背压这个词想成三条水管"&gt;&lt;span&gt;一、先忘掉「背压」这个词，想成三条水管&lt;/span&gt;
+ &lt;a href="#%e4%b8%80%e5%85%88%e5%bf%98%e6%8e%89%e8%83%8c%e5%8e%8b%e8%bf%99%e4%b8%aa%e8%af%8d%e6%83%b3%e6%88%90%e4%b8%89%e6%9d%a1%e6%b0%b4%e7%ae%a1" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;Chat 流式不是一根直管，而是 &lt;strong&gt;三段速度不一样的水管&lt;/strong&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;FastAPI（出水快）
+ ↓ MemoryOS SSE
+Next.js BFF（中转站）
+ ↓ AI SDK UI stream
+浏览器 &amp;#43; React（接水慢）&lt;/code&gt;&lt;/pre&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;FastAPI&lt;/strong&gt;：模型一旦开始吐字，几秒内推完几百个小包很常见（每个 SSE 事件有时只有一个字）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;BFF&lt;/strong&gt;：要把「自家 SSE 协议」翻译成「AI SDK / useChat 能吃的 UI 流」。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;浏览器&lt;/strong&gt;：每收到一帧就要更新消息；React 还要重绘聊天区，长文 + Markdown 更慢。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;背压&lt;/strong&gt;想解决的就一件事：&lt;strong&gt;出水不能比接水快太多，否则中间池子先满，再爆。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;调试时有个很有用的分辨法：&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;现象&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;往往说明&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;刷新后 DB 里有全文&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;后端写完了，断在 &lt;strong&gt;送到 UI&lt;/strong&gt; 的路上&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;刷新也没有&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;先查 API finalize，再查 BFF&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;姊妹篇讲的是后端为什么也会「像冻住」；本文专注 &lt;strong&gt;BFF 这一截&lt;/strong&gt;。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="二以前出了什么事用时间线说"&gt;&lt;span&gt;二、以前出了什么事？用时间线说&lt;/span&gt;
+ &lt;a href="#%e4%ba%8c%e4%bb%a5%e5%89%8d%e5%87%ba%e4%ba%86%e4%bb%80%e4%b9%88%e4%ba%8b%e7%94%a8%e6%97%b6%e9%97%b4%e7%ba%bf%e8%af%b4" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;假设 API 在 &lt;strong&gt;3 秒内&lt;/strong&gt; 发完 493 个字，每个字一个 SSE 事件。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;旧 BFF 相当于&lt;/strong&gt;：中转站员工 &lt;strong&gt;一次把 493 杯水全倒进柜台后面的桶&lt;/strong&gt;，然后才歇着。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;柜台（浏览器）每秒只能端走几杯。&lt;/li&gt;
+&lt;li&gt;桶（内存里的队列）越堆越高。&lt;/li&gt;
+&lt;li&gt;顾客很久才喝到第一口 → UI 像冻住。&lt;/li&gt;
+&lt;li&gt;再久一点 → 超时 → &lt;code&gt;network error&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;同时 DB 已经写完 → &lt;strong&gt;刷新能看见全文&lt;/strong&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这就是那次「假死」的典型画面：&lt;strong&gt;不是没生成，是中间憋住了。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;当时 BFF 里 &lt;code&gt;ReadableStream&lt;/code&gt; 的 &lt;code&gt;pull()&lt;/code&gt; 大致是：循环 &lt;code&gt;upstream.read()&lt;/code&gt;，直到 FastAPI 流结束才 &lt;code&gt;return&lt;/code&gt;。一次 &lt;code&gt;pull&lt;/code&gt; 调用就把上游读穿——下游还没来得及消费，内部已经 enqueue 了几百帧 UI 事件。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="三为什么要专门设计这层背压"&gt;&lt;span&gt;三、为什么要专门设计这层背压？&lt;/span&gt;
+ &lt;a href="#%e4%b8%89%e4%b8%ba%e4%bb%80%e4%b9%88%e8%a6%81%e4%b8%93%e9%97%a8%e8%ae%be%e8%ae%a1%e8%bf%99%e5%b1%82%e8%83%8c%e5%8e%8b" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;因为要同时解决 &lt;strong&gt;三件不同的事&lt;/strong&gt;，它们叠在一起才会像「卡死」。&lt;/p&gt;
+&lt;h3 class="heading-element" id="31-别让中转站一次吞完上游流量控制"&gt;&lt;span&gt;3.1 别让中转站一次吞完上游（流量控制）&lt;/span&gt;
+ &lt;a href="#31-%e5%88%ab%e8%ae%a9%e4%b8%ad%e8%bd%ac%e7%ab%99%e4%b8%80%e6%ac%a1%e5%90%9e%e5%ae%8c%e4%b8%8a%e6%b8%b8%e6%b5%81%e9%87%8f%e6%8e%a7%e5%88%b6" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;顾客要一杯，中转站才去上游接一杯；倒进柜台就停，等顾客下次再要。&lt;/p&gt;
+&lt;p&gt;在 Web 里：&lt;strong&gt;浏览器慢读 BFF 的 Response body → BFF 的 &lt;code&gt;pull()&lt;/code&gt; 就不会疯狂 &lt;code&gt;read()&lt;/code&gt; FastAPI&lt;/strong&gt;。下游慢，上游就别拼命抽——这就是背压的本意。&lt;/p&gt;
+&lt;p&gt;若 BFF 不管下游节奏、自己把 FastAPI 读光，爆的是 &lt;strong&gt;BFF 内部队列&lt;/strong&gt;，前端再聪明也救不了这一段。&lt;/p&gt;
+&lt;h3 class="heading-element" id="32-别-493-次晃-react合并展示"&gt;&lt;span&gt;3.2 别 493 次晃 React（合并展示）&lt;/span&gt;
+ &lt;a href="#32-%e5%88%ab-493-%e6%ac%a1%e6%99%83-react%e5%90%88%e5%b9%b6%e5%b1%95%e7%a4%ba" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;就算背压对了，若每个字仍变成一个 &lt;code&gt;text-delta&lt;/code&gt;，React 仍要更新 493 次。长回复时渲染可能只有 &lt;strong&gt;每秒几个字&lt;/strong&gt;，体感还是「卡」。&lt;/p&gt;
+&lt;p&gt;所以在 BFF 里 &lt;strong&gt;攒够大约 16 个字符再发一帧&lt;/strong&gt;（token 合并）。用户仍是流式打字感，但 React 从「每字一次」变成「每十几字一次」。&lt;/p&gt;
+&lt;h3 class="heading-element" id="33-用户点-stop-时后端还要能落库善后"&gt;&lt;span&gt;3.3 用户点 Stop 时，后端还要能落库（善后）&lt;/span&gt;
+ &lt;a href="#33-%e7%94%a8%e6%88%b7%e7%82%b9-stop-%e6%97%b6%e5%90%8e%e7%ab%af%e8%bf%98%e8%a6%81%e8%83%bd%e8%90%bd%e5%ba%93%e5%96%84%e5%90%8e" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;用户点停止，浏览器会 &lt;strong&gt;掐断和 BFF 的连接&lt;/strong&gt;。若 BFF 也立刻掐 FastAPI，后端可能来不及把「用户已经看到的那一段」写入数据库。&lt;/p&gt;
+&lt;p&gt;所以 BFF 在 abort 后会 &lt;strong&gt;继续默默读完上游&lt;/strong&gt;（drain），但 &lt;strong&gt;不再往浏览器 enqueue&lt;/strong&gt;；前端再调 cancel，带上「用户看到多长」。这样 UI 停了，库里的 assistant 仍能对齐用户快照。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="四一张图以前-vs-现在"&gt;&lt;span&gt;四、一张图：以前 vs 现在&lt;/span&gt;
+ &lt;a href="#%e5%9b%9b%e4%b8%80%e5%bc%a0%e5%9b%be%e4%bb%a5%e5%89%8d-vs-%e7%8e%b0%e5%9c%a8" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;pre&gt;&lt;code&gt;【以前：假死】
+FastAPI ████████████ 493 字 / 3 秒
+ ↓ 一口气读完
+BFF [||||||||||||||||||||] 队列堆满
+ ↓ 慢慢吐
+浏览器 ··· 几个字 ··· 卡死 ··· network error
+DB ✓ 全文已在（刷新能看见）
+
+
+【现在】
+FastAPI ████ 仍可能很快
+ ↓ 你慢读我才多读（背压）
+BFF 攒 ~16 字 → 发一帧 → 停，等浏览器
+ ↓ 少量 text-delta
+浏览器 流式更新，次数少很多
+Stop 浏览器掐 BFF → BFF 仍读完 API（不展示）→ cancel 带「看到多长」&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;背压不是炫技术语，就是 &lt;strong&gt;接水的速度决定抽水的速度&lt;/strong&gt;。BFF 正好是「快 API」和「慢浏览器」之间的水龙头。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="五这层背压能不能放在前端做"&gt;&lt;span&gt;五、这层背压能不能放在前端做？&lt;/span&gt;
+ &lt;a href="#%e4%ba%94%e8%bf%99%e5%b1%82%e8%83%8c%e5%8e%8b%e8%83%bd%e4%b8%8d%e8%83%bd%e6%94%be%e5%9c%a8%e5%89%8d%e7%ab%af%e5%81%9a" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;&lt;strong&gt;可以分块说，不能整块搬家。&lt;/strong&gt;&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;能力&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;放 FE 行不行&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;原因&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;少更新 React（合并字）&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;可以部分做&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;例如在 hook 里攒字、&lt;code&gt;requestAnimationFrame&lt;/code&gt; 再更新。能减轻「493 次渲染」。&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;慢下来才读 FastAPI&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;单靠 FE &lt;strong&gt;不够&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;背压发生在 &lt;strong&gt;谁在读谁的 body&lt;/strong&gt;。浏览器慢读 BFF 时，BFF 才会慢读 FastAPI；若 BFF 仍一次读完上游，&lt;strong&gt;爆的是 BFF 内部&lt;/strong&gt;，FE 管不到。&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;SSE → UI 协议转换&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;今天绑在 BFF&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;浏览器直连 FastAPI 可以不要 BFF，但要在 FE 写整套转换 + 鉴权代理，架构会变。&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;Stop 后 drain FastAPI&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;必须在 BFF（或等价层）&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;浏览器 abort 的是 &lt;code&gt;/api/chat&lt;/code&gt;；只有 BFF 还握着对 FastAPI 的连接，才能「对用户掐断、对后端读完」。&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;结论：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;「合并 token、少渲染」&lt;/strong&gt; → 可以挪到 FE，但 wire 上仍可能有很多小 chunk，FE 要自己节流。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;「别让 BFF 一次吞完上游」&lt;/strong&gt; → 必须在 BFF 的流转换里做（或改成 FE 直连 API 并在那一层做同样逻辑）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;「Stop 时让后端写完」&lt;/strong&gt; → 必须在 &lt;strong&gt;BFF ↔ API&lt;/strong&gt; 这一段。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;MemoryOS 选在 BFF &lt;strong&gt;合并 + pull 策略 + drain&lt;/strong&gt;，是因为 &lt;strong&gt;一处改、三层都受益&lt;/strong&gt;：API 不会被无脑狂读、到浏览器的事件更少、React 更轻，且 Stop 链路和 BFF 天然在一起。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="六实现上只记三句话不堆函数名"&gt;&lt;span&gt;六、实现上只记三句话（不堆函数名）&lt;/span&gt;
+ &lt;a href="#%e5%85%ad%e5%ae%9e%e7%8e%b0%e4%b8%8a%e5%8f%aa%e8%ae%b0%e4%b8%89%e5%8f%a5%e8%af%9d%e4%b8%8d%e5%a0%86%e5%87%bd%e6%95%b0%e5%90%8d" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;打开 &lt;code&gt;memoryos-upstream.ts&lt;/code&gt; 时，不必逐行啃，盯住三个语义就够：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;有输出就停一下&lt;/strong&gt; — &lt;code&gt;pull()&lt;/code&gt; 里 enqueue 了 UI 帧就 return，等浏览器下次 &lt;code&gt;read()&lt;/code&gt; 再接着干。对应「背压」。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;攒够一批再发&lt;/strong&gt; — 大约 16 个字符合并成一个 &lt;code&gt;text-delta&lt;/code&gt;；遇到 sources、tool、done 前强制 flush。对应「少晃 React」。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;停了仍把上游读完但不给用户&lt;/strong&gt; — &lt;code&gt;clientStopped&lt;/code&gt; 后只 drain、不 enqueue；配合 cancel API。对应「Stop 能落库」。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;BFF 路由 &lt;code&gt;app/api/chat/route.ts&lt;/code&gt; 再把 &lt;strong&gt;客户端 abort&lt;/strong&gt; 接到 &lt;strong&gt;drain FastAPI&lt;/strong&gt;：浏览器掐线 → BFF 继续读完后端 → 再 abort upstream fetch。&lt;/p&gt;
+&lt;p&gt;单元测试里用「慢上游 + 慢消费者」模拟背压：上游每 15ms 一个字、消费者每 40ms 读一次，仍要在几秒内看到首字且全文正确——防止回归成「一次灌满」或「空手 pull 卡死」。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="七和llm-慢别混在一起"&gt;&lt;span&gt;七、和「LLM 慢」别混在一起&lt;/span&gt;
+ &lt;a href="#%e4%b8%83%e5%92%8cllm-%e6%85%a2%e5%88%ab%e6%b7%b7%e5%9c%a8%e4%b8%80%e8%b5%b7" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;背压解决的是 &lt;strong&gt;管道憋住、UI 假死&lt;/strong&gt;；不解决：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;首 token 前 Graph 串行（embed、检索、首轮非流式 LLM）— 那是 API 侧 TTFT；&lt;/li&gt;
+&lt;li&gt;FastAPI &lt;code&gt;Depends(get_db)&lt;/code&gt; 占满连接池 — 见姊妹篇。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;若 &lt;strong&gt;长时间只有 Thinking、一个字都不出&lt;/strong&gt;，先查 API；若 &lt;strong&gt;DB 已有全文、UI 卡住或 network error&lt;/strong&gt;，先查 BFF 与前端管道。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="八给做-chat-bff-的三条-checklist"&gt;&lt;span&gt;八、给做 Chat BFF 的三条 Checklist&lt;/span&gt;
+ &lt;a href="#%e5%85%ab%e7%bb%99%e5%81%9a-chat-bff-%e7%9a%84%e4%b8%89%e6%9d%a1-checklist" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;流转换要尊重背压&lt;/strong&gt; — &lt;code&gt;pull()&lt;/code&gt; 是「读一点、转一点、有产出就停」，不要一次 &lt;code&gt;read()&lt;/code&gt; 穿上游。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;高频率 UI 事件要 batch&lt;/strong&gt; — 每字一帧在长文场景会拖死 React；在 BFF 或 FE 至少一层合并。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Stop 要 drain 上游&lt;/strong&gt; — 对用户掐断、对 API 读完，再配合 cancel 携带可见长度。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="参考"&gt;&lt;span&gt;参考&lt;/span&gt;
+ &lt;a href="#%e5%8f%82%e8%80%83" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;MemoryOS 全链路假死（后端 + BFF）：&lt;a href="https://joesmile.github.io/shit-fastapi-depend-redis.html"&gt;Chat SSE 假死：FastAPI Depends 占死连接池&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;代码：&lt;code&gt;memoryos-upstream.ts&lt;/code&gt;（BFF 流转换）· &lt;code&gt;app/api/chat/route.ts&lt;/code&gt;（abort → drain）· &lt;code&gt;use-chat-session.ts&lt;/code&gt;（Stop + cancel）&lt;/li&gt;
+&lt;/ul&gt;</description></item><item><title>Chat SSE 假死：FastAPI Depends 占死连接池，BFF ReadableStream 灌满队列</title><link>https://joesmile.github.io/shit-fastapi-depend-redis.html</link><pubDate>Thu, 18 Jun 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/shit-fastapi-depend-redis.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;说明&lt;/strong&gt;：下文来自 MemoryOS 一次真实 Chat SSE「假死」排查与修复。症状、时间线与改法均基于生产级调试日志；不是框架 bug 公告，而是 &lt;strong&gt;长连接 + Depends 生命周期 + 流式背压&lt;/strong&gt; 三类常见坑叠在一起的故事。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;用户问：「2022 世界杯射手榜前 10 名」。终端里 SQL 已经 &lt;code&gt;COMMIT&lt;/code&gt;，&lt;code&gt;memories&lt;/code&gt; 表也在更新——聊天框却停在「正在生成分析…」，只吐出几个字；&lt;strong&gt;刷新页面，完整答案却在&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;这不是 LLM 慢，也不是 Redis 挂了。这是一次典型的 &lt;strong&gt;假死&lt;/strong&gt;：数据其实写进库了，但 &lt;strong&gt;SSE 管道某一截没有把字节送到浏览器&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 class="heading-element" id="一先建立正确的心智模型"&gt;&lt;span&gt;一、先建立正确的心智模型&lt;/span&gt;
+ &lt;a href="#%e4%b8%80%e5%85%88%e5%bb%ba%e7%ab%8b%e6%ad%a3%e7%a1%ae%e7%9a%84%e5%bf%83%e6%99%ba%e6%a8%a1%e5%9e%8b" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;Chat 流式回复不是一条线，而是 &lt;strong&gt;三段管道&lt;/strong&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;浏览器 (useChat)
+ ↓ POST /api/chat ← Next.js BFF
+ ↓ 转成 AI SDK UI stream
+ ↓ POST /api/v1/chat/completions ← FastAPI SSE
+ ↓ LangGraph &amp;#43; LLM &amp;#43; 短 DB/Redis&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;&lt;strong&gt;假死可能发生在任意一段&lt;/strong&gt;，症状却很像：&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;段&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;典型症状&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;FastAPI&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;终端最后一条是 &lt;code&gt;COMMIT&lt;/code&gt;，之后「没动静」&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;BFF&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;API 日志显示 persist 完成，UI 只出几个字&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;浏览器&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;一直「生成中」，刷新后从 DB 读到全文&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;调试第一原则：&lt;strong&gt;先证明数据在哪一层已经完整，再查下一层为什么没送到。&lt;/strong&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="二我们一开始容易错怪谁"&gt;&lt;span&gt;二、我们一开始容易错怪谁？&lt;/span&gt;
+ &lt;a href="#%e4%ba%8c%e6%88%91%e4%bb%ac%e4%b8%80%e5%bc%80%e5%a7%8b%e5%ae%b9%e6%98%93%e9%94%99%e6%80%aa%e8%b0%81" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="误判-aredis-坏了--连接池满了"&gt;&lt;span&gt;误判 A：「Redis 坏了 / 连接池满了」&lt;/span&gt;
+ &lt;a href="#%e8%af%af%e5%88%a4-aredis-%e5%9d%8f%e4%ba%86--%e8%bf%9e%e6%8e%a5%e6%b1%a0%e6%bb%a1%e4%ba%86" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;日志里看到 Redis、DB、&lt;code&gt;memories&lt;/code&gt; 的 &lt;code&gt;INSERT&lt;/code&gt;/&lt;code&gt;COMMIT&lt;/code&gt;，很容易以为是 Redis 或 memory 任务把系统拖死。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;真相&lt;/strong&gt;：那段 SQL 往往是 &lt;strong&gt;后台 memory-extract&lt;/strong&gt;，与当前 SSE &lt;strong&gt;并行&lt;/strong&gt;，不是阻塞主链路。它反而说明 &lt;strong&gt;主请求已在收尾&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 class="heading-element" id="误判-bsse-根本没开始"&gt;&lt;span&gt;误判 B：「SSE 根本没开始」&lt;/span&gt;
+ &lt;a href="#%e8%af%af%e5%88%a4-bsse-%e6%a0%b9%e6%9c%ac%e6%b2%a1%e5%bc%80%e5%a7%8b" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;UI 完全空白时，会怀疑 FastAPI 没发 stream。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;真相&lt;/strong&gt;：有时是 BFF 的 &lt;code&gt;ReadableStream&lt;/code&gt; &lt;strong&gt;读了上游却不 enqueue&lt;/strong&gt;，浏览器永远等不到第一帧 UI 事件——API 正常，UI 仍空白。&lt;/p&gt;
+&lt;h3 class="heading-element" id="误判-c前端-react-bug"&gt;&lt;span&gt;误判 C：「前端 React bug」&lt;/span&gt;
+ &lt;a href="#%e8%af%af%e5%88%a4-c%e5%89%8d%e7%ab%af-react-bug" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;吐一点就停，像渲染卡死。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;真相&lt;/strong&gt;：API 在 2～3 秒内已发完 493 个 token，BFF 也 finalize；但 &lt;strong&gt;493 个 &lt;code&gt;text-delta&lt;/code&gt; → 493 次 React 更新&lt;/strong&gt;，消费 ~3 字/秒，像假死——是 &lt;strong&gt;管道下游太慢&lt;/strong&gt;，不是 LLM 慢。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="三后端fastapi-depends-如何占死整个-api"&gt;&lt;span&gt;三、后端：FastAPI Depends 如何「占死」整个 API&lt;/span&gt;
+ &lt;a href="#%e4%b8%89%e5%90%8e%e7%ab%affastapi-depends-%e5%a6%82%e4%bd%95%e5%8d%a0%e6%ad%bb%e6%95%b4%e4%b8%aa-api" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="31-dependsget_db-的生命周期陷阱"&gt;&lt;span&gt;3.1 &lt;code&gt;Depends(get_db)&lt;/code&gt; 的生命周期陷阱&lt;/span&gt;
+ &lt;a href="#31-dependsget_db-%e7%9a%84%e7%94%9f%e5%91%bd%e5%91%a8%e6%9c%9f%e9%99%b7%e9%98%b1" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;很多项目这样写 SSE：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;async def chat(..., db=Depends(get_db), redis=Depends(get_redis)):
+ return StreamingResponse(event_generator(), ...)&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;若 &lt;code&gt;get_db&lt;/code&gt; / &lt;code&gt;get_redis&lt;/code&gt; 是 &lt;strong&gt;yield 型依赖&lt;/strong&gt;，生命周期是：&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;从进入路由 → 到整个 HTTP 响应结束&lt;/strong&gt;（含 SSE 流全部发完）&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;一条 Chat 流可能 30～120 秒。意味着：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;一条 DB 连接&lt;/strong&gt;被占 30～120 秒&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Redis 依赖&lt;/strong&gt;同样可能被占着&lt;/li&gt;
+&lt;li&gt;连接池默认几个连接 → embedding、memory、别的请求 &lt;strong&gt;排队&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;终端「最后一次 COMMIT」可能是 &lt;strong&gt;别的请求或后台任务&lt;/strong&gt;；当前 stream 占池，整体像冻住&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这不是 Redis 算法 bug，是 &lt;strong&gt;把短资源当成了长资源&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;正确姿势：短会话&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;① 短 DB：写 user message → commit → 关
+② 短 DB：读 history → 关
+③ 计算：LangGraph &amp;#43; LLM（不持 DB）
+④ 短 DB：写 assistant → commit → 关
+Redis：按需点查，不挂在 Depends 上拖全程&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;SSE 路由改用 &lt;strong&gt;JWT-only 鉴权&lt;/strong&gt;（&lt;code&gt;get_current_user_id&lt;/code&gt;），不在 Depends 里挂 &lt;code&gt;get_db&lt;/code&gt;；需要 DB 时用 &lt;code&gt;async with AsyncSessionLocal()&lt;/code&gt; 包一小段。LangGraph 节点用 &lt;code&gt;graph_db_session&lt;/code&gt;，&lt;strong&gt;按 node 开短连接&lt;/strong&gt;，不在整段 SSE 里借一条 session。&lt;/p&gt;
+&lt;h3 class="heading-element" id="32-中间件receive-不能断"&gt;&lt;span&gt;3.2 中间件：&lt;code&gt;receive()&lt;/code&gt; 不能断&lt;/span&gt;
+ &lt;a href="#32-%e4%b8%ad%e9%97%b4%e4%bb%b6receive-%e4%b8%8d%e8%83%bd%e6%96%ad" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;InjectionGuard 为扫描 body 会先读完整 POST，再用 &lt;code&gt;replay_receive&lt;/code&gt; 回放。&lt;/p&gt;
+&lt;p&gt;若 replay &lt;strong&gt;只回放一次&lt;/strong&gt;，之后不再调用原始 &lt;code&gt;receive()&lt;/code&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;request.is_disconnected()&lt;/code&gt; 一直阻塞&lt;/li&gt;
+&lt;li&gt;用户点 Stop 无效&lt;/li&gt;
+&lt;li&gt;流无法 cancel/finalize&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;改法&lt;/strong&gt;：replay 一次后 &lt;strong&gt;delegate 回原始 &lt;code&gt;receive()&lt;/code&gt;&lt;/strong&gt;，SSE 期间仍能感知 &lt;code&gt;http.disconnect&lt;/code&gt;。&lt;/p&gt;
+&lt;h3 class="heading-element" id="33-backgroundtasks流结束了请求还没结束"&gt;&lt;span&gt;3.3 BackgroundTasks：流结束了，请求还没结束&lt;/span&gt;
+ &lt;a href="#33-backgroundtasks%e6%b5%81%e7%bb%93%e6%9d%9f%e4%ba%86%e8%af%b7%e6%b1%82%e8%bf%98%e6%b2%a1%e7%bb%93%e6%9d%9f" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;memory-extract、summary 若挂在 Starlette &lt;code&gt;BackgroundTasks&lt;/code&gt; 上：&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;SSE body 发完后，还要等 background 跑完，HTTP 才真正结束&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;BFF 的 fetch 也会多等；memory 的 COMMIT 出现在「UI 已卡住」的时间点，进一步误导。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;改法&lt;/strong&gt;：&lt;code&gt;asyncio.create_task&lt;/code&gt; detached 后台任务，带失败日志—— &lt;strong&gt;不阻塞 SSE 关闭&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 class="heading-element" id="34-sse-priming首帧要尽早出去"&gt;&lt;span&gt;3.4 SSE priming：首帧要尽早出去&lt;/span&gt;
+ &lt;a href="#34-sse-priming%e9%a6%96%e5%b8%a7%e8%a6%81%e5%b0%bd%e6%97%a9%e5%87%ba%e5%8e%bb" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;部分环境下，&lt;code&gt;StreamingResponse&lt;/code&gt; 返回后 consumer 才连上 generator。若首 token 要等 LangGraph 跑完才 yield，BFF/浏览器长时间无数据。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;改法&lt;/strong&gt;：&lt;code&gt;await gen.__anext__()&lt;/code&gt; 先产出 &lt;code&gt;start&lt;/code&gt; 帧，再包进 &lt;code&gt;stream_body()&lt;/code&gt; 返回；generator 内 &lt;code&gt;skip_start_event&lt;/code&gt; 避免重复 start。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="四bffapi-写完了为什么-ui-还在等"&gt;&lt;span&gt;四、BFF：API 写完了，为什么 UI 还在等？&lt;/span&gt;
+ &lt;a href="#%e5%9b%9bbffapi-%e5%86%99%e5%ae%8c%e4%ba%86%e4%b8%ba%e4%bb%80%e4%b9%88-ui-%e8%bf%98%e5%9c%a8%e7%ad%89" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;用一次真实时间线（修复前）：&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;时间&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;BFF&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;浏览器&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;+2.9s&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;一次 &lt;code&gt;pull()&lt;/code&gt; 读完全部上游，493 token 入队&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;—&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;+8s&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;—&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;收到第 1 个字&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;+109s&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;早已 finalize&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;才收齐 493 字，然后 &lt;code&gt;network error&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 class="heading-element" id="bug-1pull-一次读穿上游"&gt;&lt;span&gt;Bug 1：&lt;code&gt;pull()&lt;/code&gt; 一次读穿上游&lt;/span&gt;
+ &lt;a href="#bug-1pull-%e4%b8%80%e6%ac%a1%e8%af%bb%e7%a9%bf%e4%b8%8a%e6%b8%b8" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;pre&gt;&lt;code&gt;async pull(controller) {
+ while (true) {
+ const { done, value } = await upstream.read();
+ // enqueue…直到 upstream 结束才 return
+ }
+}&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;一次 pull 把几百个 UI 事件塞进队列。下游按自己节奏消费，队列堆满，最终超时。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;改法&lt;/strong&gt;：每次 &lt;code&gt;pull()&lt;/code&gt; 只读 &lt;strong&gt;一块&lt;/strong&gt; upstream，处理完就 return，让 &lt;strong&gt;backpressure&lt;/strong&gt; 生效。&lt;/p&gt;
+&lt;h3 class="heading-element" id="bug-2493-token--493-次-react-更新"&gt;&lt;span&gt;Bug 2：493 token = 493 次 React 更新&lt;/span&gt;
+ &lt;a href="#bug-2493-token--493-%e6%ac%a1-react-%e6%9b%b4%e6%96%b0" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;即使增量 pull，每个 token 一个 &lt;code&gt;text-delta&lt;/code&gt;，长对话 + markdown 仍 ~3 字/秒。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;改法&lt;/strong&gt;：BFF 合并 token（如每 &lt;strong&gt;16 字符&lt;/strong&gt; 一个 &lt;code&gt;text-delta&lt;/code&gt;）；tool/source/done 前强制 flush。&lt;/p&gt;
+&lt;h3 class="heading-element" id="bug-3合并后的空-pull"&gt;&lt;span&gt;Bug 3：合并后的「空 pull」&lt;/span&gt;
+ &lt;a href="#bug-3%e5%90%88%e5%b9%b6%e5%90%8e%e7%9a%84%e7%a9%ba-pull" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;pending &amp;lt; 16&lt;/code&gt; 就 return 且 &lt;strong&gt;本轮没有 enqueue&lt;/strong&gt; → stream 假死，~60s 后 &lt;code&gt;TypeError: network error&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;改法&lt;/strong&gt;：单次 &lt;code&gt;pull()&lt;/code&gt; 内 &lt;strong&gt;循环读 upstream&lt;/strong&gt;，直到至少 emit 一批 UI 帧，或 upstream 结束——&lt;strong&gt;不要空手 return&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 class="heading-element" id="兜底error-时从-db-sync"&gt;&lt;span&gt;兜底：error 时从 DB sync&lt;/span&gt;
+ &lt;a href="#%e5%85%9c%e5%ba%95error-%e6%97%b6%e4%bb%8e-db-sync" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;stream error 但 assistant 已有部分内容时，&lt;strong&gt;从 DB 拉回持久化消息&lt;/strong&gt;。刷新能看全，说明落盘 OK——这是合理的 safety net。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="五一张总图"&gt;&lt;span&gt;五、一张总图&lt;/span&gt;
+ &lt;a href="#%e4%ba%94%e4%b8%80%e5%bc%a0%e6%80%bb%e5%9b%be" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;pre&gt;&lt;code&gt;┌─────────────┐ ┌──────────────┐ ┌─────────────────┐
+│ Browser │────▶│ Next BFF │────▶│ FastAPI SSE │
+│ useChat │◀────│ pull&amp;#43;合并 │◀────│ 短DB&amp;#43;primed │
+└─────────────┘ └──────────────┘ └─────────────────┘
+ │ │ │
+ │ 慢：493次渲染 │ 曾：一次灌满493帧 │ 曾：Depends占池30s&amp;#43;
+ │ 改：合并delta │ 改：增量pull&amp;#43;防空pull │ 改：短session&amp;#43;detach
+ ▼ ▼ ▼
+ 刷新读DB OK network error 60s COMMIT 正常&lt;/code&gt;&lt;/pre&gt;&lt;hr&gt;
+&lt;h2 class="heading-element" id="六给架构师的五条-checklist"&gt;&lt;span&gt;六、给架构师的五条 Checklist&lt;/span&gt;
+ &lt;a href="#%e5%85%ad%e7%bb%99%e6%9e%b6%e6%9e%84%e5%b8%88%e7%9a%84%e4%ba%94%e6%9d%a1-checklist" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;流式接口禁用长生命周期 Depends&lt;/strong&gt; — DB/Redis 不能绑在整个 &lt;code&gt;StreamingResponse&lt;/code&gt; 上；按「写-算-写」拆短事务。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中间件读 body 必须恢复 &lt;code&gt;receive&lt;/code&gt; 链&lt;/strong&gt; — replay + delegate，否则 disconnect/cancel 全瞎。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;后台任务别挂在 HTTP 生命周期上&lt;/strong&gt; — post-stream 用 detached task 或队列，并考虑 shutdown。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;BFF 流转换要尊重 backpressure&lt;/strong&gt; — &lt;code&gt;pull()&lt;/code&gt; 是「读一点、转一点」；高频率 UI 事件要 batch。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;用「落盘 vs 送达」区分问题&lt;/strong&gt; — 刷新能看全 → 查 SSE/BFF；刷新也没有 → 查 API finalize。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="七调试方法论"&gt;&lt;span&gt;七、调试方法论&lt;/span&gt;
+ &lt;a href="#%e4%b8%83%e8%b0%83%e8%af%95%e6%96%b9%e6%b3%95%e8%ae%ba" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;分层打点&lt;/strong&gt;：API（stream start / persist / ASGI done）、BFF（pull 次数、finalize）、FE（status、lastTextLen）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;对齐时间线&lt;/strong&gt;：同一请求看「API 何时 persist」「BFF 何时 finalize」「UI 何时到 N 字」。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;先证伪再修复&lt;/strong&gt;：曾以为 Redis；日志证明 stream 期间 pool &lt;code&gt;checkedout: 0&lt;/code&gt; 后，才转向 BFF。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;一次只改一层&lt;/strong&gt;：pull 修复后仍慢 → 加 token 合并；合并后空 pull → 加 inner loop。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="八结语"&gt;&lt;span&gt;八、结语&lt;/span&gt;
+ &lt;a href="#%e5%85%ab%e7%bb%93%e8%af%ad" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;这次假死没有单一罪魁祸首，而是三个常见假设撞在一起：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;HTTP 请求 ≈ 短 RPC（实际是 &lt;strong&gt;分钟级长连接&lt;/strong&gt;）&lt;/li&gt;
+&lt;li&gt;stream 转发 ≈ 内存拷贝（实际是 &lt;strong&gt;有背压的生产者-消费者&lt;/strong&gt;）&lt;/li&gt;
+&lt;li&gt;token 级 streaming ≈ 更好 UX（在 React 里可能是 &lt;strong&gt;493 次重渲染&lt;/strong&gt;）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;修完之后的目标架构很简单：&lt;strong&gt;连接只借一小会儿，数据像水管一节一节流，而不是一次性灌满水桶。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;若你在做 Chat + SSE + BFF，不妨扫一眼自己的 &lt;code&gt;Depends&lt;/code&gt;、&lt;code&gt;middleware receive&lt;/code&gt; 和 &lt;code&gt;ReadableStream pull&lt;/code&gt;——很多问题还没爆，只是并发还不够大。&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;strong&gt;相关阅读&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://joesmile.github.io/sse-vs-websocket.html"&gt;SSE 和 WebSocket 怎么选？&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://joesmile.github.io/chat-security.html"&gt;LLM 聊天与 RAG 安全怎么落地？&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://joesmile.github.io/memoryos-security-map.html"&gt;MemoryOS 聊天安全一张图&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;em&gt;MemoryOS 修复 commit：&lt;code&gt;fix(chat): unblock SSE streaming across API and BFF&lt;/code&gt;&lt;/em&gt;&lt;/p&gt;</description></item><item><title>MemoryOS 聊天安全一张图：分层、时序与防护总表</title><link>https://joesmile.github.io/memoryos-security-map.html</link><pubDate>Tue, 16 Jun 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/memoryos-security-map.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;blockquote&gt;
 &lt;p&gt;&lt;strong&gt;说明&lt;/strong&gt;：本文是 MemoryOS &lt;strong&gt;聊天 / RAG 安全实现对照&lt;/strong&gt;，与 &lt;a href="https://joesmile.github.io/chat-security.html"&gt;《LLM 聊天与 RAG 安全怎么落地》&lt;/a&gt; 互补——那一篇讲方法论，本篇讲&lt;strong&gt;本系统在哪一层、用什么包、防什么、还缺什么&lt;/strong&gt;。文中 &lt;strong&gt;DeSyntax&lt;/strong&gt; 指 EntropyShield 包的打碎句法 mask，见第一节末「DeSyntax 是什么」。&lt;br&gt;
 &lt;strong&gt;回顾顺序&lt;/strong&gt;：第一节总表与 DeSyntax 说明 → 分层图 → 时序图&lt;/p&gt;
 &lt;/blockquote&gt;
@@ -338,10 +760,6 @@
 			&lt;tr&gt;
 					&lt;td style="text-align: left"&gt;&lt;strong&gt;DeSyntax 做什么&lt;/strong&gt;&lt;/td&gt;
 					&lt;td style="text-align: left"&gt;在&lt;strong&gt;低信任来源&lt;/strong&gt;进 LLM 前，对正文做确定性 &lt;strong&gt;mask&lt;/strong&gt;（步进遮挡字符），把「动词—宾语—指令」这类&lt;strong&gt;可被执行的句法链&lt;/strong&gt;打散，使模型难以把资料里的句子当成要遵守的指令。&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td style="text-align: left"&gt;&lt;strong&gt;不做什么&lt;/strong&gt;&lt;/td&gt;
-					&lt;td style="text-align: left"&gt;不替你做「这段话是不是攻击」的语义判决；&lt;strong&gt;不&lt;/strong&gt;用于用户 Chat 输入（那是 &lt;code&gt;prompt_security&lt;/code&gt; / &lt;code&gt;llm-injection-guard&lt;/code&gt; 的事）。&lt;/td&gt;
 			&lt;/tr&gt;
 			&lt;tr&gt;
 					&lt;td style="text-align: left"&gt;&lt;strong&gt;在 MemoryOS 里谁调用&lt;/strong&gt;&lt;/td&gt;
@@ -3154,153 +3572,4 @@ export default async function KnowledgeBasePage({ params }: Props) {
 &lt;li&gt;&lt;a href="https://search.google.com/search-console" target="_blank" rel="external nofollow noopener noreferrer"&gt;Google Search Console&lt;/a&gt;（索引与 CWV 报告）&lt;/li&gt;
 &lt;li&gt;&lt;a href="https://developer.chrome.com/docs/crux" target="_blank" rel="external nofollow noopener noreferrer"&gt;CrUX 官方说明&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;&lt;a href="https://web.dev/articles/inp" target="_blank" rel="external nofollow noopener noreferrer"&gt;Web Vitals（INP 说明）&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;</description></item><item><title>hapi-confidence</title><link>https://joesmile.github.io/hapi-confidence.html</link><pubDate>Mon, 16 Sep 2019 10:46:51 +0800</pubDate><guid>https://joesmile.github.io/hapi-confidence.html</guid><category domain="https://joesmile.github.io/categories/%E5%BD%92%E6%A1%A3/">归档</category><description>&lt;img src="https://joesmile.github.io/images/covers/confidence_logo.png" alt="featured image" referrerpolicy="no-referrer"&gt;&lt;blockquote&gt;
-&lt;p&gt;记录一个confidence插件，简单明了地根据不同环境变量更换配置。平时我们写 config 或者 settings 文件要仔细区分环境，参数值比较混乱，难管理。有了 confidence 插件之后，再也不用担心环境参数混乱的问题了。&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;p&gt;&lt;strong&gt;confidence 地址&lt;/strong&gt;&lt;br&gt;
-&lt;a href="https://github.com/hapipal/confidence" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://github.com/hapipal/confidence&lt;/a&gt;&lt;/p&gt;
-&lt;h2 class="heading-element" id="基本结构"&gt;&lt;span&gt;基本结构&lt;/span&gt;
- &lt;a href="#%e5%9f%ba%e6%9c%ac%e7%bb%93%e6%9e%84" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h2&gt;&lt;p&gt;结构很清晰，根据不同的环境变量获取不同的值。还能做一些范围控制。使用起来很简单，只要配置&lt;strong&gt;标准参数&lt;/strong&gt;(如:$filter)即可。&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;{
- &amp;#34;key1&amp;#34;: &amp;#34;abc&amp;#34;,
- &amp;#34;key2&amp;#34;: {
- &amp;#34;$filter&amp;#34;: &amp;#34;env&amp;#34;,
- &amp;#34;production&amp;#34;: {
- &amp;#34;deeper&amp;#34;: {
- &amp;#34;$value&amp;#34;: &amp;#34;value&amp;#34;
- }
- },
- &amp;#34;$default&amp;#34;: {
- &amp;#34;$filter&amp;#34;: &amp;#34;platform&amp;#34;,
- &amp;#34;android&amp;#34;: 0,
- &amp;#34;ios&amp;#34;: 1,
- &amp;#34;$default&amp;#34;: 2
- }
- },
- &amp;#34;ab&amp;#34;: {
- &amp;#34;$filter&amp;#34;: &amp;#34;random.a&amp;#34;,
- &amp;#34;$range&amp;#34;: [
- { &amp;#34;limit&amp;#34;: 10, &amp;#34;value&amp;#34;: 4 },
- { &amp;#34;limit&amp;#34;: 20, &amp;#34;value&amp;#34;: 5 }
- ],
- &amp;#34;$default&amp;#34;: 6
- },
- &amp;#34;$meta&amp;#34;: {
- &amp;#34;description&amp;#34;: &amp;#34;example file&amp;#34;
- }
-}&lt;/code&gt;&lt;/pre&gt;&lt;h2 class="heading-element" id="api"&gt;&lt;span&gt;API&lt;/span&gt;
- &lt;a href="#api" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h2&gt;&lt;p&gt;我们在使用confidence之前，先介绍下它的API&lt;/p&gt;
-&lt;blockquote&gt;
-&lt;p&gt;new Store(document) 创建一个配置容器&lt;br&gt;
-store.load(document) 载入一份配置文件&lt;br&gt;
-store.get() 根据参数生成配置&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;pre&gt;&lt;code&gt;// 一个简单的demo
-const { Store } = require(&amp;#39;confidence&amp;#39;)
-const { env } = process
-// 从环境变量取值
-const criteria = {
- env: env.NODE_ENV
-}
-const settings = {
- platform: {
- $filter: &amp;#39;env&amp;#39;,
- development: &amp;#39;this is DEV environment&amp;#39;,
- qa: &amp;#39;this is in QA environment&amp;#39;,
- production: &amp;#39;this is in PRO environment&amp;#39;,
- $default: &amp;#39;this is in LOCAL environment&amp;#39;
- }
-}
-// 创建配置容器
-const store = new Store(settings)
-
-module.exports = {
- settings: store.get(&amp;#39;/&amp;#39;, criteria) //根据环境变量生成对应的配置
-}
-// settings 结构为 { platform: &amp;#39;this is in DEV environment&amp;#39; }&lt;/code&gt;&lt;/pre&gt;&lt;h2 class="heading-element" id="标准参数"&gt;&lt;span&gt;标准参数&lt;/span&gt;
- &lt;a href="#%e6%a0%87%e5%87%86%e5%8f%82%e6%95%b0" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h2&gt;&lt;h3 class="heading-element" id="filter"&gt;&lt;span&gt;filter&lt;/span&gt;
- &lt;a href="#filter" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;blockquote&gt;
-&lt;p&gt;规则：变量名只能用 字母 和 &amp;lsquo;_&amp;rsquo;。根据匹配环境变量的值，来选择用什么变量。（看个栗子瞬间就懂）&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;pre&gt;&lt;code&gt;platform: {
- $filter: &amp;#39;NODE_ENV&amp;#39;,
- development: &amp;#39;this is DEV environment&amp;#39;,
- qa: &amp;#39;this is in QA environment&amp;#39;,
- production: &amp;#39;this is in PRO environment&amp;#39;,
- $default: &amp;#39;this is in LOCAL environment&amp;#39;
-}&lt;/code&gt;&lt;/pre&gt;&lt;blockquote&gt;
-&lt;p&gt;在终端执行export，会把所有的环境变量打印出来，观察下 NODE_ENV 的值，本人本地的 NODE_ENV 值是 dev， 故直接用default值。&lt;br&gt;
-最终结果： { platform: &amp;rsquo;this is in LOCAL environment&amp;rsquo; }&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;p&gt;PS: 把$filter 当作 switch-case 语句就好理解了。&lt;/p&gt;
-&lt;h3 class="heading-element" id="range"&gt;&lt;span&gt;range&lt;/span&gt;
- &lt;a href="#range" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;先上个栗子&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;key: {
- &amp;#34;$filter&amp;#34;: &amp;#34;random&amp;#34;,
- &amp;#34;$range&amp;#34;: [
- { &amp;#34;limit&amp;#34;: 10, &amp;#34;value&amp;#34;: 4 },
- { &amp;#34;limit&amp;#34;: 20, &amp;#34;value&amp;#34;: 5 }
- ],
- &amp;#34;$default&amp;#34;: 6
-}&lt;/code&gt;&lt;/pre&gt;&lt;blockquote&gt;
-&lt;p&gt;当 random 小于等于10，key的值为4；&lt;br&gt;
-当 random 大于10并且小于等于20， key的值为5；&lt;br&gt;
-当 random 大于20，key的值为6&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;h3 class="heading-element" id="shared-valuesbase"&gt;&lt;span&gt;Shared values（$base）&lt;/span&gt;
- &lt;a href="#shared-valuesbase" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;用栗子说明问题&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;{
- &amp;#34;$filter&amp;#34;: &amp;#34;env&amp;#34;,
- &amp;#34;$base&amp;#34;: {
- &amp;#34;logLocation&amp;#34;: &amp;#34;/logs&amp;#34;
- },
- &amp;#34;production&amp;#34;: {
- &amp;#34;logLevel&amp;#34;: &amp;#34;error&amp;#34;
- },
- &amp;#34;qa&amp;#34;: {
- &amp;#34;logLevel&amp;#34;: &amp;#34;info&amp;#34;,
- &amp;#34;logLocation&amp;#34;: &amp;#34;/qa/logs&amp;#34;
- },
- &amp;#34;staging&amp;#34;: {
- &amp;#34;logLevel&amp;#34;: &amp;#34;debug&amp;#34;
- }
-}&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;当写了$base，以下的条件中如果不覆写 logLocation, 就默认有一个&amp;quot;logLocation&amp;quot;: &amp;ldquo;/logs&amp;rdquo; 属性。 &lt;br&gt;
-所以当 env 是 production 时，结果为&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;{ 
- &amp;#34;logLevel&amp;#34;: &amp;#34;error&amp;#34;,
- &amp;#34;logLocation&amp;#34;: &amp;#34;/logs&amp;#34;
-}&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;当 env 是 qa 时，结果为&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;{
- &amp;#34;logLevel&amp;#34;: &amp;#34;info&amp;#34;,
- &amp;#34;logLocation&amp;#34;: &amp;#34;/qa/logs&amp;#34;
-}&lt;/code&gt;&lt;/pre&gt;&lt;h2 class="heading-element" id="总结"&gt;&lt;span&gt;总结&lt;/span&gt;
- &lt;a href="#%e6%80%bb%e7%bb%93" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h2&gt;&lt;p&gt;使用confidence设置配置文件快捷方便，清晰明了，node型框架(hapi or koa)统统适用。&lt;/p&gt;
-&lt;h3 class="heading-element" id="最后"&gt;&lt;span&gt;最后&lt;/span&gt;
- &lt;a href="#%e6%9c%80%e5%90%8e" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;这里有一个 hapi 小型脚手架，包含confidence插件， Glue插件等，练手好demo！&lt;br&gt;
-demo传送门 &lt;a href="https://github.com/JoeSmile/hapi-confidence" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://github.com/JoeSmile/hapi-confidence&lt;/a&gt;&lt;/p&gt;</description></item><item><title>angular_relevant_links</title><link>https://joesmile.github.io/angular-relevant-links.html</link><pubDate>Tue, 10 Sep 2019 10:10:33 +0800</pubDate><guid>https://joesmile.github.io/angular-relevant-links.html</guid><category domain="https://joesmile.github.io/categories/%E5%BD%92%E6%A1%A3/">归档</category><description>&lt;p&gt;&lt;strong&gt;Angular CI commands&lt;/strong&gt;
-&lt;a href="https://www.jianshu.com/p/67acdd21f89c" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.jianshu.com/p/67acdd21f89c&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://www.jianshu.com/p/981418077f89" target="_blank" rel="external nofollow noopener noreferrer"&gt;https://www.jianshu.com/p/981418077f89&lt;/a&gt;&lt;/p&gt;</description></item></channel></rss>
+&lt;/ul&gt;</description></item></channel></rss>
