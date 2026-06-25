@@ -244,195 +244,422 @@ docs = retriever.invoke(&amp;#34;2026最新RAG优化方案&amp;#34;)&lt;/code&gt
 					&lt;td&gt;MultiQuery → Ensemble(BM25+向量) → ParentDocument → ContextCompression&lt;/td&gt;
 			&lt;/tr&gt;
 	&lt;/tbody&gt;
-&lt;/table&gt;</description></item><item><title>BFF 背压：为什么 Chat 流式不能「中转站一次扛完」</title><link>https://joesmile.github.io/bff-stream-backpressure.html</link><pubDate>Fri, 19 Jun 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/bff-stream-backpressure.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;blockquote&gt;
-&lt;p&gt;&lt;strong&gt;说明&lt;/strong&gt;：下文来自 MemoryOS Chat 流式链路的一次真实「假死」排查。后端连接池、中间件等问题见姊妹篇 &lt;a href="https://joesmile.github.io/shit-fastapi-depend-redis.html"&gt;Chat SSE 假死：FastAPI Depends 占死连接池&lt;/a&gt;；本文只讲 &lt;strong&gt;BFF 与浏览器之间&lt;/strong&gt; 为什么要做背压、怎么做、为什么不能全扔给前端。&lt;/p&gt;
+&lt;/table&gt;</description></item><item><title>如何为 RAG 系统编写高质量的 Benchmark：从 Golden Case 设计到指标解读</title><link>https://joesmile.github.io/rag-benchmark.html</link><pubDate>Sat, 30 May 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/rag-benchmark.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;blockquote&gt;
+&lt;p&gt;以世界杯知识问答系统为例，聊聊我对 RAG 评测的理解与实践&lt;/p&gt;
 &lt;/blockquote&gt;
-&lt;p&gt;用户问：「2022 世界杯射手榜前 10 名」。终端里 SQL 已经 &lt;code&gt;COMMIT&lt;/code&gt;，刷新页面却能看到完整回答——聊天框却停在「正在生成…」，只吐出几个字，甚至最后 &lt;code&gt;network error&lt;/code&gt;。&lt;/p&gt;
-&lt;p&gt;这不是 LLM 没算完，是 &lt;strong&gt;管道某一截憋住了&lt;/strong&gt;。其中很大一块，出在 &lt;strong&gt;Next.js BFF 怎么读 FastAPI、又怎么喂给浏览器&lt;/strong&gt;。&lt;/p&gt;
-&lt;h2 class="heading-element" id="一先忘掉背压这个词想成三条水管"&gt;&lt;span&gt;一、先忘掉「背压」这个词，想成三条水管&lt;/span&gt;
- &lt;a href="#%e4%b8%80%e5%85%88%e5%bf%98%e6%8e%89%e8%83%8c%e5%8e%8b%e8%bf%99%e4%b8%aa%e8%af%8d%e6%83%b3%e6%88%90%e4%b8%89%e6%9d%a1%e6%b0%b4%e7%ae%a1" class="heading-mark"&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="引言为什么-rag-系统尤其需要-benchmark"&gt;&lt;span&gt;引言：为什么 RAG 系统尤其需要 Benchmark&lt;/span&gt;
+ &lt;a href="#%e5%bc%95%e8%a8%80%e4%b8%ba%e4%bb%80%e4%b9%88-rag-%e7%b3%bb%e7%bb%9f%e5%b0%a4%e5%85%b6%e9%9c%80%e8%a6%81-benchmark" class="heading-mark"&gt;
  &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
  &lt;/a&gt;
-&lt;/h2&gt;&lt;p&gt;Chat 流式不是一根直管，而是 &lt;strong&gt;三段速度不一样的水管&lt;/strong&gt;：&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;FastAPI（出水快）
- ↓ MemoryOS SSE
-Next.js BFF（中转站）
- ↓ AI SDK UI stream
-浏览器 &amp;#43; React（接水慢）&lt;/code&gt;&lt;/pre&gt;&lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;FastAPI&lt;/strong&gt;：模型一旦开始吐字，几秒内推完几百个小包很常见（每个 SSE 事件有时只有一个字）。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;BFF&lt;/strong&gt;：要把「自家 SSE 协议」翻译成「AI SDK / useChat 能吃的 UI 流」。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;浏览器&lt;/strong&gt;：每收到一帧就要更新消息；React 还要重绘聊天区，长文 + Markdown 更慢。&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;&lt;strong&gt;背压&lt;/strong&gt;想解决的就一件事：&lt;strong&gt;出水不能比接水快太多，否则中间池子先满，再爆。&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;调试时有个很有用的分辨法：&lt;/p&gt;
+&lt;/h2&gt;&lt;p&gt;在传统软件开发中，单元测试和集成测试已经是很成熟的实践。但对于 RAG（检索增强生成）系统，情况要复杂得多——我们不仅要验证代码逻辑是否正确，还要验证&lt;strong&gt;检索质量&lt;/strong&gt;和&lt;strong&gt;生成质量&lt;/strong&gt;是否达标。更棘手的是，大语言模型具有随机性，同样的输入在不同时刻可能给出不同的输出。&lt;/p&gt;
+&lt;p&gt;这就引出了一个核心问题：&lt;strong&gt;我们如何客观地衡量一个 RAG 系统的好坏？&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;答案就是 &lt;strong&gt;Benchmark（基准测试）&lt;/strong&gt;——一套标准化的测试用例集和评分体系，能够自动化地评估系统的准确性、性能和工具选择能力。&lt;/p&gt;
+&lt;p&gt;本文将结合我为世界杯知识问答系统编写的 Benchmark 实践，分享从 Golden Case 设计到评测指标落地的完整方法论。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="一benchmark-的核心理念可量化可重复可演进"&gt;&lt;span&gt;一、Benchmark 的核心理念：可量化、可重复、可演进&lt;/span&gt;
+ &lt;a href="#%e4%b8%80benchmark-%e7%9a%84%e6%a0%b8%e5%bf%83%e7%90%86%e5%bf%b5%e5%8f%af%e9%87%8f%e5%8c%96%e5%8f%af%e9%87%8d%e5%a4%8d%e5%8f%af%e6%bc%94%e8%bf%9b" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;一个好的 Benchmark 应该满足三个基本要求：&lt;/p&gt;
 &lt;table&gt;
 	&lt;thead&gt;
 			&lt;tr&gt;
-					&lt;th style="text-align: left"&gt;现象&lt;/th&gt;
-					&lt;th style="text-align: left"&gt;往往说明&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;原则&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;含义&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;为什么重要&lt;/th&gt;
 			&lt;/tr&gt;
 	&lt;/thead&gt;
 	&lt;tbody&gt;
 			&lt;tr&gt;
-					&lt;td style="text-align: left"&gt;刷新后 DB 里有全文&lt;/td&gt;
-					&lt;td style="text-align: left"&gt;后端写完了，断在 &lt;strong&gt;送到 UI&lt;/strong&gt; 的路上&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;可量化&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;每个测试用例都有明确的“正确”标准&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;否则无法自动判断通过/失败，评测就变成了人工主观判断&lt;/td&gt;
 			&lt;/tr&gt;
 			&lt;tr&gt;
-					&lt;td style="text-align: left"&gt;刷新也没有&lt;/td&gt;
-					&lt;td style="text-align: left"&gt;先查 API finalize，再查 BFF&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;可重复&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;同样的代码版本，多次运行结果应一致&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;保证对比不同版本时，差异来自代码改动而非随机因素&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;可演进&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;随着系统能力提升，能方便地增加新用例&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;RAG 系统在持续迭代，Benchmark 必须能同步成长&lt;/td&gt;
 			&lt;/tr&gt;
 	&lt;/tbody&gt;
 &lt;/table&gt;
-&lt;p&gt;姊妹篇讲的是后端为什么也会「像冻住」；本文专注 &lt;strong&gt;BFF 这一截&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;在代码层面，这种理念体现为三个核心模块的协作：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;golden.json（测试用例集）
+ ↓
+benchmark.py（评测引擎）
+ ↓
+result.json（评测报告）&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;以下，我会逐一拆解这三个模块的设计思路。&lt;/p&gt;
 &lt;hr&gt;
-&lt;h2 class="heading-element" id="二以前出了什么事用时间线说"&gt;&lt;span&gt;二、以前出了什么事？用时间线说&lt;/span&gt;
- &lt;a href="#%e4%ba%8c%e4%bb%a5%e5%89%8d%e5%87%ba%e4%ba%86%e4%bb%80%e4%b9%88%e4%ba%8b%e7%94%a8%e6%97%b6%e9%97%b4%e7%ba%bf%e8%af%b4" class="heading-mark"&gt;
+&lt;h2 class="heading-element" id="二golden-case-设计写好标准答案是门手艺"&gt;&lt;span&gt;二、Golden Case 设计：写好“标准答案”是门手艺&lt;/span&gt;
+ &lt;a href="#%e4%ba%8cgolden-case-%e8%ae%be%e8%ae%a1%e5%86%99%e5%a5%bd%e6%a0%87%e5%87%86%e7%ad%94%e6%a1%88%e6%98%af%e9%97%a8%e6%89%8b%e8%89%ba" class="heading-mark"&gt;
  &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
  &lt;/a&gt;
-&lt;/h2&gt;&lt;p&gt;假设 API 在 &lt;strong&gt;3 秒内&lt;/strong&gt; 发完 493 个字，每个字一个 SSE 事件。&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;旧 BFF 相当于&lt;/strong&gt;：中转站员工 &lt;strong&gt;一次把 493 杯水全倒进柜台后面的桶&lt;/strong&gt;，然后才歇着。&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;柜台（浏览器）每秒只能端走几杯。&lt;/li&gt;
-&lt;li&gt;桶（内存里的队列）越堆越高。&lt;/li&gt;
-&lt;li&gt;顾客很久才喝到第一口 → UI 像冻住。&lt;/li&gt;
-&lt;li&gt;再久一点 → 超时 → &lt;code&gt;network error&lt;/code&gt;。&lt;/li&gt;
-&lt;li&gt;同时 DB 已经写完 → &lt;strong&gt;刷新能看见全文&lt;/strong&gt;。&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;这就是那次「假死」的典型画面：&lt;strong&gt;不是没生成，是中间憋住了。&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;当时 BFF 里 &lt;code&gt;ReadableStream&lt;/code&gt; 的 &lt;code&gt;pull()&lt;/code&gt; 大致是：循环 &lt;code&gt;upstream.read()&lt;/code&gt;，直到 FastAPI 流结束才 &lt;code&gt;return&lt;/code&gt;。一次 &lt;code&gt;pull&lt;/code&gt; 调用就把上游读穿——下游还没来得及消费，内部已经 enqueue 了几百帧 UI 事件。&lt;/p&gt;
-&lt;hr&gt;
-&lt;h2 class="heading-element" id="三为什么要专门设计这层背压"&gt;&lt;span&gt;三、为什么要专门设计这层背压？&lt;/span&gt;
- &lt;a href="#%e4%b8%89%e4%b8%ba%e4%bb%80%e4%b9%88%e8%a6%81%e4%b8%93%e9%97%a8%e8%ae%be%e8%ae%a1%e8%bf%99%e5%b1%82%e8%83%8c%e5%8e%8b" class="heading-mark"&gt;
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;golden.json&lt;/code&gt; 是整个 Benchmark 的灵魂。它的质量直接决定了评测结果的可信度。一个设计良好的 Golden Case 应该是&lt;strong&gt;自描述的、可验证的、能捕获多种正确答案形态的&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 class="heading-element" id="21-案例结构一个完整的-golden-case-应该包含什么"&gt;&lt;span&gt;2.1 案例结构：一个完整的 Golden Case 应该包含什么？&lt;/span&gt;
+ &lt;a href="#21-%e6%a1%88%e4%be%8b%e7%bb%93%e6%9e%84%e4%b8%80%e4%b8%aa%e5%ae%8c%e6%95%b4%e7%9a%84-golden-case-%e5%ba%94%e8%af%a5%e5%8c%85%e5%90%ab%e4%bb%80%e4%b9%88" class="heading-mark"&gt;
  &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
  &lt;/a&gt;
-&lt;/h2&gt;&lt;p&gt;因为要同时解决 &lt;strong&gt;三件不同的事&lt;/strong&gt;，它们叠在一起才会像「卡死」。&lt;/p&gt;
-&lt;h3 class="heading-element" id="31-别让中转站一次吞完上游流量控制"&gt;&lt;span&gt;3.1 别让中转站一次吞完上游（流量控制）&lt;/span&gt;
- &lt;a href="#31-%e5%88%ab%e8%ae%a9%e4%b8%ad%e8%bd%ac%e7%ab%99%e4%b8%80%e6%ac%a1%e5%90%9e%e5%ae%8c%e4%b8%8a%e6%b8%b8%e6%b5%81%e9%87%8f%e6%8e%a7%e5%88%b6" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;顾客要一杯，中转站才去上游接一杯；倒进柜台就停，等顾客下次再要。&lt;/p&gt;
-&lt;p&gt;在 Web 里：&lt;strong&gt;浏览器慢读 BFF 的 Response body → BFF 的 &lt;code&gt;pull()&lt;/code&gt; 就不会疯狂 &lt;code&gt;read()&lt;/code&gt; FastAPI&lt;/strong&gt;。下游慢，上游就别拼命抽——这就是背压的本意。&lt;/p&gt;
-&lt;p&gt;若 BFF 不管下游节奏、自己把 FastAPI 读光，爆的是 &lt;strong&gt;BFF 内部队列&lt;/strong&gt;，前端再聪明也救不了这一段。&lt;/p&gt;
-&lt;h3 class="heading-element" id="32-别-493-次晃-react合并展示"&gt;&lt;span&gt;3.2 别 493 次晃 React（合并展示）&lt;/span&gt;
- &lt;a href="#32-%e5%88%ab-493-%e6%ac%a1%e6%99%83-react%e5%90%88%e5%b9%b6%e5%b1%95%e7%a4%ba" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;就算背压对了，若每个字仍变成一个 &lt;code&gt;text-delta&lt;/code&gt;，React 仍要更新 493 次。长回复时渲染可能只有 &lt;strong&gt;每秒几个字&lt;/strong&gt;，体感还是「卡」。&lt;/p&gt;
-&lt;p&gt;所以在 BFF 里 &lt;strong&gt;攒够大约 16 个字符再发一帧&lt;/strong&gt;（token 合并）。用户仍是流式打字感，但 React 从「每字一次」变成「每十几字一次」。&lt;/p&gt;
-&lt;h3 class="heading-element" id="33-用户点-stop-时后端还要能落库善后"&gt;&lt;span&gt;3.3 用户点 Stop 时，后端还要能落库（善后）&lt;/span&gt;
- &lt;a href="#33-%e7%94%a8%e6%88%b7%e7%82%b9-stop-%e6%97%b6%e5%90%8e%e7%ab%af%e8%bf%98%e8%a6%81%e8%83%bd%e8%90%bd%e5%ba%93%e5%96%84%e5%90%8e" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;用户点停止，浏览器会 &lt;strong&gt;掐断和 BFF 的连接&lt;/strong&gt;。若 BFF 也立刻掐 FastAPI，后端可能来不及把「用户已经看到的那一段」写入数据库。&lt;/p&gt;
-&lt;p&gt;所以 BFF 在 abort 后会 &lt;strong&gt;继续默默读完上游&lt;/strong&gt;（drain），但 &lt;strong&gt;不再往浏览器 enqueue&lt;/strong&gt;；前端再调 cancel，带上「用户看到多长」。这样 UI 停了，库里的 assistant 仍能对齐用户快照。&lt;/p&gt;
-&lt;hr&gt;
-&lt;h2 class="heading-element" id="四一张图以前-vs-现在"&gt;&lt;span&gt;四、一张图：以前 vs 现在&lt;/span&gt;
- &lt;a href="#%e5%9b%9b%e4%b8%80%e5%bc%a0%e5%9b%be%e4%bb%a5%e5%89%8d-vs-%e7%8e%b0%e5%9c%a8" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h2&gt;&lt;pre&gt;&lt;code&gt;【以前：假死】
-FastAPI ████████████ 493 字 / 3 秒
- ↓ 一口气读完
-BFF [||||||||||||||||||||] 队列堆满
- ↓ 慢慢吐
-浏览器 ··· 几个字 ··· 卡死 ··· network error
-DB ✓ 全文已在（刷新能看见）
-
-
-【现在】
-FastAPI ████ 仍可能很快
- ↓ 你慢读我才多读（背压）
-BFF 攒 ~16 字 → 发一帧 → 停，等浏览器
- ↓ 少量 text-delta
-浏览器 流式更新，次数少很多
-Stop 浏览器掐 BFF → BFF 仍读完 API（不展示）→ cancel 带「看到多长」&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;背压不是炫技术语，就是 &lt;strong&gt;接水的速度决定抽水的速度&lt;/strong&gt;。BFF 正好是「快 API」和「慢浏览器」之间的水龙头。&lt;/p&gt;
-&lt;hr&gt;
-&lt;h2 class="heading-element" id="五这层背压能不能放在前端做"&gt;&lt;span&gt;五、这层背压能不能放在前端做？&lt;/span&gt;
- &lt;a href="#%e4%ba%94%e8%bf%99%e5%b1%82%e8%83%8c%e5%8e%8b%e8%83%bd%e4%b8%8d%e8%83%bd%e6%94%be%e5%9c%a8%e5%89%8d%e7%ab%af%e5%81%9a" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h2&gt;&lt;p&gt;&lt;strong&gt;可以分块说，不能整块搬家。&lt;/strong&gt;&lt;/p&gt;
+&lt;/h3&gt;&lt;p&gt;以下是一个典型的 Golden Case 示例：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;{
+ &amp;#34;category&amp;#34;: &amp;#34;球队荣誉&amp;#34;,
+ &amp;#34;question&amp;#34;: &amp;#34;意大利一共几次世界杯冠军？分别是哪些年份？&amp;#34;,
+ &amp;#34;expected_tool&amp;#34;: &amp;#34;sql_query&amp;#34;,
+ &amp;#34;expected_sql_contains&amp;#34;: [&amp;#34;worldcup-tournaments&amp;#34;, &amp;#34;Italy&amp;#34;],
+ &amp;#34;expected_answer_contains&amp;#34;: [&amp;#34;1934&amp;#34;, &amp;#34;1938&amp;#34;, &amp;#34;1982&amp;#34;, &amp;#34;2006&amp;#34;],
+ &amp;#34;expected_answer_groups&amp;#34;: [[&amp;#34;4&amp;#34;, &amp;#34;四&amp;#34;]],
+ &amp;#34;expected_answer_contains_all&amp;#34;: [&amp;#34;意大利&amp;#34;]
+}&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;逐字段拆解其设计意图：&lt;/p&gt;
 &lt;table&gt;
 	&lt;thead&gt;
 			&lt;tr&gt;
-					&lt;th style="text-align: left"&gt;能力&lt;/th&gt;
-					&lt;th style="text-align: left"&gt;放 FE 行不行&lt;/th&gt;
-					&lt;th style="text-align: left"&gt;原因&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;字段&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;用途&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;设计要点&lt;/th&gt;
 			&lt;/tr&gt;
 	&lt;/thead&gt;
 	&lt;tbody&gt;
 			&lt;tr&gt;
-					&lt;td style="text-align: left"&gt;&lt;strong&gt;少更新 React（合并字）&lt;/strong&gt;&lt;/td&gt;
-					&lt;td style="text-align: left"&gt;可以部分做&lt;/td&gt;
-					&lt;td style="text-align: left"&gt;例如在 hook 里攒字、&lt;code&gt;requestAnimationFrame&lt;/code&gt; 再更新。能减轻「493 次渲染」。&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;category&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;分类标签&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;方便按类别统计准确率，识别薄弱环节&lt;/td&gt;
 			&lt;/tr&gt;
 			&lt;tr&gt;
-					&lt;td style="text-align: left"&gt;&lt;strong&gt;慢下来才读 FastAPI&lt;/strong&gt;&lt;/td&gt;
-					&lt;td style="text-align: left"&gt;单靠 FE &lt;strong&gt;不够&lt;/strong&gt;&lt;/td&gt;
-					&lt;td style="text-align: left"&gt;背压发生在 &lt;strong&gt;谁在读谁的 body&lt;/strong&gt;。浏览器慢读 BFF 时，BFF 才会慢读 FastAPI；若 BFF 仍一次读完上游，&lt;strong&gt;爆的是 BFF 内部&lt;/strong&gt;，FE 管不到。&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;question&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;用户输入&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;应模拟真实用户的语言习惯，包括口语化表达、中英文混用等&lt;/td&gt;
 			&lt;/tr&gt;
 			&lt;tr&gt;
-					&lt;td style="text-align: left"&gt;&lt;strong&gt;SSE → UI 协议转换&lt;/strong&gt;&lt;/td&gt;
-					&lt;td style="text-align: left"&gt;今天绑在 BFF&lt;/td&gt;
-					&lt;td style="text-align: left"&gt;浏览器直连 FastAPI 可以不要 BFF，但要在 FE 写整套转换 + 鉴权代理，架构会变。&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;expected_tool&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;预期调用的工具&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;验证 Agent 的路由决策是否正确（工具选择本身就是 Agent 的核心能力）&lt;/td&gt;
 			&lt;/tr&gt;
 			&lt;tr&gt;
-					&lt;td style="text-align: left"&gt;&lt;strong&gt;Stop 后 drain FastAPI&lt;/strong&gt;&lt;/td&gt;
-					&lt;td style="text-align: left"&gt;&lt;strong&gt;必须在 BFF（或等价层）&lt;/strong&gt;&lt;/td&gt;
-					&lt;td style="text-align: left"&gt;浏览器 abort 的是 &lt;code&gt;/api/chat&lt;/code&gt;；只有 BFF 还握着对 FastAPI 的连接，才能「对用户掐断、对后端读完」。&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;expected_sql_contains&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;SQL 校验片段&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;确保生成的 SQL 包含了必要的表名/字段，防止模型“偷懒”或用错误表名&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;expected_answer_contains&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;OR 匹配关键词&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;答案中包含其中任意一个即可（常用于同义词场景）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;expected_answer_contains_all&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;AND 匹配关键词&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;答案中必须包含所有这些关键词（常用于验证核心实体）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;code&gt;expected_answer_groups&lt;/code&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;分组匹配&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;每组至少命中一个，适合多维度验证（如“4次”=“四”或“4”）&lt;/td&gt;
 			&lt;/tr&gt;
 	&lt;/tbody&gt;
 &lt;/table&gt;
-&lt;p&gt;结论：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;「合并 token、少渲染」&lt;/strong&gt; → 可以挪到 FE，但 wire 上仍可能有很多小 chunk，FE 要自己节流。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;「别让 BFF 一次吞完上游」&lt;/strong&gt; → 必须在 BFF 的流转换里做（或改成 FE 直连 API 并在那一层做同样逻辑）。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;「Stop 时让后端写完」&lt;/strong&gt; → 必须在 &lt;strong&gt;BFF ↔ API&lt;/strong&gt; 这一段。&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;MemoryOS 选在 BFF &lt;strong&gt;合并 + pull 策略 + drain&lt;/strong&gt;，是因为 &lt;strong&gt;一处改、三层都受益&lt;/strong&gt;：API 不会被无脑狂读、到浏览器的事件更少、React 更轻，且 Stop 链路和 BFF 天然在一起。&lt;/p&gt;
-&lt;hr&gt;
-&lt;h2 class="heading-element" id="六实现上只记三句话不堆函数名"&gt;&lt;span&gt;六、实现上只记三句话（不堆函数名）&lt;/span&gt;
- &lt;a href="#%e5%85%ad%e5%ae%9e%e7%8e%b0%e4%b8%8a%e5%8f%aa%e8%ae%b0%e4%b8%89%e5%8f%a5%e8%af%9d%e4%b8%8d%e5%a0%86%e5%87%bd%e6%95%b0%e5%90%8d" class="heading-mark"&gt;
+&lt;h3 class="heading-element" id="22-分级设计策略l1--l2--l3--l4"&gt;&lt;span&gt;2.2 分级设计策略：L1 → L2 → L3 → L4&lt;/span&gt;
+ &lt;a href="#22-%e5%88%86%e7%ba%a7%e8%ae%be%e8%ae%a1%e7%ad%96%e7%95%a5l1--l2--l3--l4" class="heading-mark"&gt;
  &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
  &lt;/a&gt;
-&lt;/h2&gt;&lt;p&gt;打开 &lt;code&gt;memoryos-upstream.ts&lt;/code&gt; 时，不必逐行啃，盯住三个语义就够：&lt;/p&gt;
+&lt;/h3&gt;&lt;p&gt;为了让 Benchmark 能够反映系统在不同能力层次上的表现，我建议将用例分为四个等级：&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;等级&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;名称&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;描述&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;示例问题&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;L1&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;单点事实&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;答案就在一个文档/一条记录中&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;“梅西是哪个国家的？”&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;L2&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;聚合统计&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;需要汇总多条记录&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;“梅西在世界杯进了几个球？”&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;L3&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;多跳推理&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;需要关联多个实体或文档&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;“阿根廷夺冠那年，梅西进了几个球？”&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;L4&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;开放式分析&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;需要综合多源信息生成评价&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;“如何评价梅西在2022年世界杯的表现？”&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;这种分级策略的价值在于：当系统整体准确率不理想时，你能快速定位是&lt;strong&gt;检索不够精准（L1失败）&lt;/strong&gt;、&lt;strong&gt;SQL生成有问题（L2失败）&lt;/strong&gt;，还是&lt;strong&gt;语义理解不足（L4失败）&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 class="heading-element" id="23-golden-case-编写的十大黄金法则"&gt;&lt;span&gt;2.3 Golden Case 编写的“十大黄金法则”&lt;/span&gt;
+ &lt;a href="#23-golden-case-%e7%bc%96%e5%86%99%e7%9a%84%e5%8d%81%e5%a4%a7%e9%bb%84%e9%87%91%e6%b3%95%e5%88%99" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;基于本次实践的经验教训，我总结了以下十条编写建议：&lt;/p&gt;
 &lt;ol&gt;
-&lt;li&gt;&lt;strong&gt;有输出就停一下&lt;/strong&gt; — &lt;code&gt;pull()&lt;/code&gt; 里 enqueue 了 UI 帧就 return，等浏览器下次 &lt;code&gt;read()&lt;/code&gt; 再接着干。对应「背压」。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;攒够一批再发&lt;/strong&gt; — 大约 16 个字符合并成一个 &lt;code&gt;text-delta&lt;/code&gt;；遇到 sources、tool、done 前强制 flush。对应「少晃 React」。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;停了仍把上游读完但不给用户&lt;/strong&gt; — &lt;code&gt;clientStopped&lt;/code&gt; 后只 drain、不 enqueue；配合 cancel API。对应「Stop 能落库」。&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;BFF 路由 &lt;code&gt;app/api/chat/route.ts&lt;/code&gt; 再把 &lt;strong&gt;客户端 abort&lt;/strong&gt; 接到 &lt;strong&gt;drain FastAPI&lt;/strong&gt;：浏览器掐线 → BFF 继续读完后端 → 再 abort upstream fetch。&lt;/p&gt;
-&lt;p&gt;单元测试里用「慢上游 + 慢消费者」模拟背压：上游每 15ms 一个字、消费者每 40ms 读一次，仍要在几秒内看到首字且全文正确——防止回归成「一次灌满」或「空手 pull 卡死」。&lt;/p&gt;
-&lt;hr&gt;
-&lt;h2 class="heading-element" id="七和llm-慢别混在一起"&gt;&lt;span&gt;七、和「LLM 慢」别混在一起&lt;/span&gt;
- &lt;a href="#%e4%b8%83%e5%92%8cllm-%e6%85%a2%e5%88%ab%e6%b7%b7%e5%9c%a8%e4%b8%80%e8%b5%b7" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h2&gt;&lt;p&gt;背压解决的是 &lt;strong&gt;管道憋住、UI 假死&lt;/strong&gt;；不解决：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;首 token 前 Graph 串行（embed、检索、首轮非流式 LLM）— 那是 API 侧 TTFT；&lt;/li&gt;
-&lt;li&gt;FastAPI &lt;code&gt;Depends(get_db)&lt;/code&gt; 占满连接池 — 见姊妹篇。&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;若 &lt;strong&gt;长时间只有 Thinking、一个字都不出&lt;/strong&gt;，先查 API；若 &lt;strong&gt;DB 已有全文、UI 卡住或 network error&lt;/strong&gt;，先查 BFF 与前端管道。&lt;/p&gt;
-&lt;hr&gt;
-&lt;h2 class="heading-element" id="八给做-chat-bff-的三条-checklist"&gt;&lt;span&gt;八、给做 Chat BFF 的三条 Checklist&lt;/span&gt;
- &lt;a href="#%e5%85%ab%e7%bb%99%e5%81%9a-chat-bff-%e7%9a%84%e4%b8%89%e6%9d%a1-checklist" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h2&gt;&lt;ol&gt;
-&lt;li&gt;&lt;strong&gt;流转换要尊重背压&lt;/strong&gt; — &lt;code&gt;pull()&lt;/code&gt; 是「读一点、转一点、有产出就停」，不要一次 &lt;code&gt;read()&lt;/code&gt; 穿上游。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;高频率 UI 事件要 batch&lt;/strong&gt; — 每字一帧在长文场景会拖死 React；在 BFF 或 FE 至少一层合并。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Stop 要 drain 上游&lt;/strong&gt; — 对用户掐断、对 API 读完，再配合 cancel 携带可见长度。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;问题要模拟真实用户&lt;/strong&gt;：不要写“SELECT 查询”这种技术语言，要用口语化提问。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;关键词要允许多种表达&lt;/strong&gt;：用 OR 匹配处理同义词（如“4次”和“四届”）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;核心实体必须强制包含&lt;/strong&gt;：用 &lt;code&gt;expected_answer_contains_all&lt;/code&gt; 确保关键实体不会丢失。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SQL 校验片段要精准&lt;/strong&gt;：只检查关键的表名和核心条件，不要过度约束 SQL 的具体写法。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;善用分组匹配处理复杂答案&lt;/strong&gt;：多维度验证时，使用 &lt;code&gt;expected_answer_groups&lt;/code&gt; 实现“每组至少命中一个”。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;分类标签要稳定&lt;/strong&gt;：品类不宜过细，且一旦确定就不要随意改名，否则无法对比历史趋势。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;每条用例要注明预期工具&lt;/strong&gt;：这是验证 Agent 路由决策的最直接手段。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;保持用例之间的独立性&lt;/strong&gt;：每个用例不应依赖前一个用例的执行结果。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;定期审视并淘汰过时用例&lt;/strong&gt;：系统能力提升后，某些 L1 用例可能变得过于简单。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;从错误中提炼用例&lt;/strong&gt;：每次发现系统的边界漏洞，就把它固化为一条新的 Golden Case。&lt;/li&gt;
 &lt;/ol&gt;
 &lt;hr&gt;
-&lt;h2 class="heading-element" id="参考"&gt;&lt;span&gt;参考&lt;/span&gt;
- &lt;a href="#%e5%8f%82%e8%80%83" class="heading-mark"&gt;
+&lt;h2 class="heading-element" id="三评测指标设计你无法改进你无法度量的东西"&gt;&lt;span&gt;三、评测指标设计：你无法改进你无法度量的东西&lt;/span&gt;
+ &lt;a href="#%e4%b8%89%e8%af%84%e6%b5%8b%e6%8c%87%e6%a0%87%e8%ae%be%e8%ae%a1%e4%bd%a0%e6%97%a0%e6%b3%95%e6%94%b9%e8%bf%9b%e4%bd%a0%e6%97%a0%e6%b3%95%e5%ba%a6%e9%87%8f%e7%9a%84%e4%b8%9c%e8%a5%bf" class="heading-mark"&gt;
  &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
  &lt;/a&gt;
-&lt;/h2&gt;&lt;ul&gt;
-&lt;li&gt;MemoryOS 全链路假死（后端 + BFF）：&lt;a href="https://joesmile.github.io/shit-fastapi-depend-redis.html"&gt;Chat SSE 假死：FastAPI Depends 占死连接池&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;代码：&lt;code&gt;memoryos-upstream.ts&lt;/code&gt;（BFF 流转换）· &lt;code&gt;app/api/chat/route.ts&lt;/code&gt;（abort → drain）· &lt;code&gt;use-chat-session.ts&lt;/code&gt;（Stop + cancel）&lt;/li&gt;
-&lt;/ul&gt;</description></item><item><title>企业级 LangChain / LangGraph 重试、降级与异常兜底体系完整落地指南</title><link>https://joesmile.github.io/retry-fallback-degrade.html</link><pubDate>Tue, 26 May 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/retry-fallback-degrade.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;blockquote&gt;
+&lt;/h2&gt;&lt;p&gt;本次 Benchmark 从&lt;strong&gt;四个维度&lt;/strong&gt;收集指标：答案准确性、工具选择准确率、性能与成本、SQL 正确性。&lt;/p&gt;
+&lt;h3 class="heading-element" id="31-答案准确性"&gt;&lt;span&gt;3.1 答案准确性&lt;/span&gt;
+ &lt;a href="#31-%e7%ad%94%e6%a1%88%e5%87%86%e7%a1%ae%e6%80%a7" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;指标&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;计算方式&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;含义&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;准确率（Accuracy）&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;正确数 / 总数&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;整体答案质量&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;按类别准确率&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;按 category 分组统计&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;识别哪个领域最薄弱&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;按等级准确率&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;按 L1-L4 分级统计&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;识别系统瓶颈在检索还是推理&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 class="heading-element" id="32-工具选择准确率"&gt;&lt;span&gt;3.2 工具选择准确率&lt;/span&gt;
+ &lt;a href="#32-%e5%b7%a5%e5%85%b7%e9%80%89%e6%8b%a9%e5%87%86%e7%a1%ae%e7%8e%87" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;指标&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;计算方式&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;含义&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;工具匹配率&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;预期工具实际被调用的比例&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Agent 路由决策的准确性&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;SQL 必要缺失率&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;应调用 SQL 但未调用的比例&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;衡量 Agent 是否“懒得查数据库”&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 class="heading-element" id="33-性能与成本"&gt;&lt;span&gt;3.3 性能与成本&lt;/span&gt;
+ &lt;a href="#33-%e6%80%a7%e8%83%bd%e4%b8%8e%e6%88%90%e6%9c%ac" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;指标&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;含义&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;平均延迟（Latency）&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;每个请求的响应时间（秒）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;Token 消耗&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;Prompt / Completion / Total&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;请求失败率&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;非 200 响应的比例&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 class="heading-element" id="34-sql-正确性"&gt;&lt;span&gt;3.4 SQL 正确性&lt;/span&gt;
+ &lt;a href="#34-sql-%e6%ad%a3%e7%a1%ae%e6%80%a7" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th style="text-align: left"&gt;指标&lt;/th&gt;
+					&lt;th style="text-align: left"&gt;含义&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;SQL 校验通过率&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;生成的 SQL 是否符合语法约束和关键片段包含&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td style="text-align: left"&gt;&lt;strong&gt;SQL 必要缺失&lt;/strong&gt;&lt;/td&gt;
+					&lt;td style="text-align: left"&gt;应该用 SQL 但 Agent 选择了语义搜索的比例&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="四工程实现亮点这些细节值得关注"&gt;&lt;span&gt;四、工程实现亮点：这些细节值得关注&lt;/span&gt;
+ &lt;a href="#%e5%9b%9b%e5%b7%a5%e7%a8%8b%e5%ae%9e%e7%8e%b0%e4%ba%ae%e7%82%b9%e8%bf%99%e4%ba%9b%e7%bb%86%e8%8a%82%e5%80%bc%e5%be%97%e5%85%b3%e6%b3%a8" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;在 Benchmark 代码的实现过程中，以下几个设计点值得分享：&lt;/p&gt;
+&lt;h3 class="heading-element" id="41-并发执行缩短评测时间"&gt;&lt;span&gt;4.1 并发执行，缩短评测时间&lt;/span&gt;
+ &lt;a href="#41-%e5%b9%b6%e5%8f%91%e6%89%a7%e8%a1%8c%e7%bc%a9%e7%9f%ad%e8%af%84%e6%b5%8b%e6%97%b6%e9%97%b4" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;使用 &lt;code&gt;ThreadPoolExecutor&lt;/code&gt; 实现并发请求，通过 &lt;code&gt;--workers&lt;/code&gt; 参数控制并发度。这对于包含大量用例的 Benchmark 尤其重要，可以显著缩短评测时间。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;with ThreadPoolExecutor(max_workers=config.workers) as executor:
+ futures = {
+ executor.submit(evaluate_single_case, case, case_index, config): case_index
+ for case_index, case in indexed_cases
+ }&lt;/code&gt;&lt;/pre&gt;&lt;h3 class="heading-element" id="42-支持重试机制提高评测稳定性"&gt;&lt;span&gt;4.2 支持重试机制，提高评测稳定性&lt;/span&gt;
+ &lt;a href="#42-%e6%94%af%e6%8c%81%e9%87%8d%e8%af%95%e6%9c%ba%e5%88%b6%e6%8f%90%e9%ab%98%e8%af%84%e6%b5%8b%e7%a8%b3%e5%ae%9a%e6%80%a7" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;API 请求可能因网络波动或服务负载而偶发失败，通过 &lt;code&gt;--retries&lt;/code&gt; 参数控制重试次数，可以有效减少因环境因素导致的误报。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;for attempt in range(config.retries &amp;#43; 1):
+ try:
+ response = requests.post(...)
+ return response
+ except Exception as exc:
+ last_error = exc
+ if attempt &amp;lt; config.retries:
+ time.sleep(1)
+ continue
+ raise&lt;/code&gt;&lt;/pre&gt;&lt;h3 class="heading-element" id="43-运行元数据记录确保结果可追溯"&gt;&lt;span&gt;4.3 运行元数据记录，确保结果可追溯&lt;/span&gt;
+ &lt;a href="#43-%e8%bf%90%e8%a1%8c%e5%85%83%e6%95%b0%e6%8d%ae%e8%ae%b0%e5%bd%95%e7%a1%ae%e4%bf%9d%e7%bb%93%e6%9e%9c%e5%8f%af%e8%bf%bd%e6%ba%af" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;每次评测都会记录运行时间、API 地址、Golden 文件的 SHA256、Git Commit 等信息。这使得当评测结果出现异常时，能够快速定位是 Golden 变更还是代码变更导致的。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;def build_run_metadata(config: BenchmarkConfig) -&amp;gt; Dict[str, Any]:
+ return {
+ &amp;#34;run_at&amp;#34;: datetime.now(timezone.utc).isoformat(),
+ &amp;#34;golden_sha256&amp;#34;: _golden_digest(config.golden_path),
+ &amp;#34;git_commit&amp;#34;: _git_commit(),
+ &amp;#34;model&amp;#34;: settings.model_name,
+ ...
+ }&lt;/code&gt;&lt;/pre&gt;&lt;h3 class="heading-element" id="44-按类别和等级统计定位薄弱环节"&gt;&lt;span&gt;4.4 按类别和等级统计，定位薄弱环节&lt;/span&gt;
+ &lt;a href="#44-%e6%8c%89%e7%b1%bb%e5%88%ab%e5%92%8c%e7%ad%89%e7%ba%a7%e7%bb%9f%e8%ae%a1%e5%ae%9a%e4%bd%8d%e8%96%84%e5%bc%b1%e7%8e%af%e8%8a%82" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;最终生成的评测报告不仅包含整体准确率，还会按 &lt;code&gt;category&lt;/code&gt; 分别统计各品类的准确率。这对我们快速定位系统的薄弱领域非常有帮助：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;按类别统计:
+ - 球队荣誉: 答案 85.7% (12/14), 工具 92.9% (13/14)
+ - 球员数据: 答案 73.3% (11/15), 工具 86.7% (13/15)
+ - 赛程比分: 答案 100.0% (8/8), 工具 100.0% (8/8)&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;从这个输出我们可以快速判断：“球员数据”类别的答案准确率偏低，需要重点优化检索或生成逻辑。&lt;/p&gt;
+&lt;h3 class="heading-element" id="45-阈值退出机制确保-cicd-门禁"&gt;&lt;span&gt;4.5 阈值退出机制，确保 CI/CD 门禁&lt;/span&gt;
+ &lt;a href="#45-%e9%98%88%e5%80%bc%e9%80%80%e5%87%ba%e6%9c%ba%e5%88%b6%e7%a1%ae%e4%bf%9d-cicd-%e9%97%a8%e7%a6%81" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;通过 &lt;code&gt;--min-accuracy&lt;/code&gt; 参数，可以设定准确率的最低阈值。当评测结果低于阈值时，进程以非零状态码退出。这非常适合集成到 CI/CD 流程中——如果本次改动导致准确率下降，流水线可以自动失败，阻止低质量代码合并。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="五常见陷阱与最佳实践"&gt;&lt;span&gt;五、常见陷阱与最佳实践&lt;/span&gt;
+ &lt;a href="#%e4%ba%94%e5%b8%b8%e8%a7%81%e9%99%b7%e9%98%b1%e4%b8%8e%e6%9c%80%e4%bd%b3%e5%ae%9e%e8%b7%b5" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="陷阱-1过度约束答案匹配"&gt;&lt;span&gt;陷阱 1：过度约束答案匹配&lt;/span&gt;
+ &lt;a href="#%e9%99%b7%e9%98%b1-1%e8%bf%87%e5%ba%a6%e7%ba%a6%e6%9d%9f%e7%ad%94%e6%a1%88%e5%8c%b9%e9%85%8d" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;错误做法&lt;/strong&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;{
+ &amp;#34;expected_answer_contains_all&amp;#34;: [&amp;#34;意大利&amp;#34;, &amp;#34;4&amp;#34;, &amp;#34;1934&amp;#34;, &amp;#34;1938&amp;#34;, &amp;#34;1982&amp;#34;, &amp;#34;2006&amp;#34;]
+}&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;&lt;code&gt;expected_answer_contains_all&lt;/code&gt; 要求答案中必须同时包含全部 6 个关键词。一旦模型回答“意大利一共夺得过四次冠军，分别在1934、1938、1982和2006年”，虽然完全正确，但“4”可能以“四”的形式出现，导致匹配失败。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;正确做法&lt;/strong&gt;：使用 &lt;code&gt;expected_answer_groups&lt;/code&gt; 分组匹配，并考虑中英文数字的变体。&lt;/p&gt;
+&lt;h3 class="heading-element" id="陷阱-2sql-校验过于严格"&gt;&lt;span&gt;陷阱 2：SQL 校验过于严格&lt;/span&gt;
+ &lt;a href="#%e9%99%b7%e9%98%b1-2sql-%e6%a0%a1%e9%aa%8c%e8%bf%87%e4%ba%8e%e4%b8%a5%e6%a0%bc" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;错误做法&lt;/strong&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;{
+ &amp;#34;expected_sql_contains&amp;#34;: [&amp;#34;SELECT&amp;#34;, &amp;#34;FROM&amp;#34;, &amp;#34;WHERE&amp;#34;, &amp;#34;JOIN&amp;#34;, &amp;#34;worldcup-tournaments&amp;#34;, &amp;#34;Italy&amp;#34;]
+}&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;要求 SQL 中包含 JOIN，但视图可能已经预聚合，不需要 JOIN。过于严格的校验会导致本该通过的用例被判失败。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;正确做法&lt;/strong&gt;：只校验&lt;strong&gt;关键表名&lt;/strong&gt;和&lt;strong&gt;核心条件&lt;/strong&gt;，不过度约束 SQL 的具体结构。&lt;/p&gt;
+&lt;h3 class="heading-element" id="陷阱-3用例之间存在隐式依赖"&gt;&lt;span&gt;陷阱 3：用例之间存在隐式依赖&lt;/span&gt;
+ &lt;a href="#%e9%99%b7%e9%98%b1-3%e7%94%a8%e4%be%8b%e4%b9%8b%e9%97%b4%e5%ad%98%e5%9c%a8%e9%9a%90%e5%bc%8f%e4%be%9d%e8%b5%96" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;错误做法&lt;/strong&gt;：用例 A 查询“2022年世界杯冠军是谁”，用例 B 问“这支球队的队长是谁”。如果用例 A 的执行结果被缓存或状态共享，会污染用例 B 的测试环境。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;正确做法&lt;/strong&gt;：每个用例都是独立的请求，不依赖其他用例的执行状态。&lt;/p&gt;
+&lt;h3 class="heading-element" id="陷阱-4忽视真实用户的提问方式"&gt;&lt;span&gt;陷阱 4：忽视真实用户的提问方式&lt;/span&gt;
+ &lt;a href="#%e9%99%b7%e9%98%b1-4%e5%bf%bd%e8%a7%86%e7%9c%9f%e5%ae%9e%e7%94%a8%e6%88%b7%e7%9a%84%e6%8f%90%e9%97%ae%e6%96%b9%e5%bc%8f" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;错误做法&lt;/strong&gt;：问题写成“SELECT * FROM matches WHERE year=2022”这种技术语言，无法反映真实用户行为。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;正确做法&lt;/strong&gt;：“2022年世界杯有哪些比赛？”或“2022年世界杯赛程是怎样的？”&lt;/p&gt;
+&lt;h3 class="heading-element" id="陷阱-5忽视异常场景"&gt;&lt;span&gt;陷阱 5：忽视异常场景&lt;/span&gt;
+ &lt;a href="#%e9%99%b7%e9%98%b1-5%e5%bf%bd%e8%a7%86%e5%bc%82%e5%b8%b8%e5%9c%ba%e6%99%af" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;错误做法&lt;/strong&gt;：所有用例都是系统能正确回答的问题。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;正确做法&lt;/strong&gt;：应包含边界用例，如“XXX是谁？”（数据库中没有该球员）、“查询2099年的世界杯”等，验证系统的异常处理能力。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="六从-benchmark-结果到系统优化一个案例"&gt;&lt;span&gt;六、从 Benchmark 结果到系统优化：一个案例&lt;/span&gt;
+ &lt;a href="#%e5%85%ad%e4%bb%8e-benchmark-%e7%bb%93%e6%9e%9c%e5%88%b0%e7%b3%bb%e7%bb%9f%e4%bc%98%e5%8c%96%e4%b8%80%e4%b8%aa%e6%a1%88%e4%be%8b" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;假设你的评测结果显示以下情况：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;SQL 校验通过: 5/12 (41.7%)
+应使用 SQL 但未使用: 3&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;这揭示了一个明确的问题：&lt;strong&gt;Agent 经常忽略 SQL 查询，或者生成的 SQL 语法/表名错误。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;这种场景下，你可以采取以下优化策略：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;强化系统提示词中的 SQL 规则&lt;/strong&gt;，明确告知模型“如果问题需要精确的数值统计，请优先使用 SQL”。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;提供视图字段的完整示例&lt;/strong&gt;，减少 LLM 猜测表名/字段名的概率。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;增加 SQL 语法校验的反馈机制&lt;/strong&gt;，如果 SQL 执行失败，让 Agent 可以自动修正重试。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;将失败的用例转化为 Golden 用例&lt;/strong&gt;，确保后续迭代不会再犯同样的错误。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="七总结"&gt;&lt;span&gt;七、总结&lt;/span&gt;
+ &lt;a href="#%e4%b8%83%e6%80%bb%e7%bb%93" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;Benchmark 不是“做完就丢”的一次性工作，而是&lt;strong&gt;伴随系统持续演进的基石&lt;/strong&gt;。以下是几个关键建议：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;先写 Benchmark，再写代码&lt;/strong&gt;：哪怕只有 5-10 个用例，也能让开发过程更有方向感。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;从 L1/L2 做起，逐步升级到 L3/L4&lt;/strong&gt;：先保证“查得准”，再追求“答得巧”。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;每次 Golden 变更都要记录&lt;/strong&gt;：在运行元数据中记录 &lt;code&gt;golden_sha256&lt;/code&gt;，确保评测结果可追溯。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;失败用例是最好的老师&lt;/strong&gt;：每次评测失败，都意味着一个值得优化的方向。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;将 Benchmark 集成到 CI/CD&lt;/strong&gt;：让每次代码提交都触发自动评测，防止准确率回退。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;定期审视并扩充用例&lt;/strong&gt;：随着系统能力提升，L1 用例的区分度会下降，需要补充更高难度的用例。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;最后分享一句对我影响很深的话：&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;“You can&amp;rsquo;t improve what you don&amp;rsquo;t measure.”&lt;/em&gt; —— Peter Drucker&lt;/p&gt;
+&lt;p&gt;在 RAG 系统的世界里，Benchmark 就是我们用来“测量”的那把尺子。它可能不完美，但没有它，我们连自己有多差都不知道。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;hr&gt;</description></item><item><title>企业级 LangChain / LangGraph 重试、降级与异常兜底体系完整落地指南</title><link>https://joesmile.github.io/retry-fallback-degrade.html</link><pubDate>Tue, 26 May 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/retry-fallback-degrade.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;blockquote&gt;
 &lt;p&gt;&lt;strong&gt;说明&lt;/strong&gt;：下文「重试 / 降级 / 兜底」三分法是&lt;strong&gt;教学模型&lt;/strong&gt;，便于分层设计；各团队 Runbook 里的叫法可能不同。代码基于 LangChain Core &lt;strong&gt;0.3.x&lt;/strong&gt; 的 &lt;code&gt;Runnable&lt;/code&gt; API（&lt;code&gt;with_retry&lt;/code&gt; / &lt;code&gt;with_fallbacks&lt;/code&gt;）。&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;p&gt;在企业级 RAG、Agent 系统上线后，大量线上故障往往来自&lt;strong&gt;下游依赖&lt;/strong&gt;——第三方 API 超时、向量库连接抖动、工具调用异常、大模型限流……如果没有完善的重试、降级与兜底机制，单次依赖故障会直接传导到用户侧。&lt;/p&gt;
