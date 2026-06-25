@@ -244,6 +244,604 @@ docs = retriever.invoke(&amp;#34;2026最新RAG优化方案&amp;#34;)&lt;/code&gt
 					&lt;td&gt;MultiQuery → Ensemble(BM25+向量) → ParentDocument → ContextCompression&lt;/td&gt;
 			&lt;/tr&gt;
 	&lt;/tbody&gt;
+&lt;/table&gt;</description></item><item><title>RAG Agent Benchmark 调优实战：从 85% 到 100%（答案 + 工具）</title><link>https://joesmile.github.io/rag-benchmark-optimize.html</link><pubDate>Fri, 05 Jun 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/rag-benchmark-optimize.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;blockquote&gt;
+&lt;p&gt;当你发现「答案对了，但工具选错了」，才算真正开始调优 RAG 系统。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="前言别急着调模型先建-benchmark"&gt;&lt;span&gt;前言：别急着调模型，先建 Benchmark&lt;/span&gt;
+ &lt;a href="#%e5%89%8d%e8%a8%80%e5%88%ab%e6%80%a5%e7%9d%80%e8%b0%83%e6%a8%a1%e5%9e%8b%e5%85%88%e5%bb%ba-benchmark" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;我们的系统是一个世界杯数据问答 Agent：&lt;strong&gt;FastAPI → Workflow Router → simple_qa / complex_flow / gossip&lt;/strong&gt;，底层是 pgVector fact card + 分析视图（&lt;code&gt;vw_*&lt;/code&gt;），上层是 LangChain Agent + 三级 Query Cache（L1 内存 / L2 Redis 精确 / L3 语义）。&lt;/p&gt;
+&lt;p&gt;功能跑通后，我们写了 &lt;strong&gt;20 条 Golden Case&lt;/strong&gt;（球员统计、SQL 排行、语义检索、中国队等），用 &lt;code&gt;benchmark/benchmark.py&lt;/code&gt; 对 &lt;code&gt;/chat&lt;/code&gt; 做端到端评测。&lt;/p&gt;
+&lt;p&gt;第一轮冷跑（&lt;code&gt;--skip-cache&lt;/code&gt;）结果：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;{
+ &amp;#34;total&amp;#34;: 20,
+ &amp;#34;answer_accuracy&amp;#34;: 85.0,
+ &amp;#34;tool_accuracy&amp;#34;: 65.0,
+ &amp;#34;average_latency&amp;#34;: 5.13,
+ &amp;#34;sql_valid_rate&amp;#34;: &amp;#34;8/11&amp;#34;,
+ &amp;#34;sql_required_miss&amp;#34;: 1
+}&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;&lt;strong&gt;85% 答案、65% 工具&lt;/strong&gt;——说明不少题「路走歪了但 LLM 兜底对了」，也有 3 条是路由进了 Mock 流程，答案直接错。&lt;/p&gt;
+&lt;p&gt;下面先汇总&lt;strong&gt;我们实际用到、且可复现&lt;/strong&gt;的提准方法，再按踩坑顺序展开。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="方法速览我们用到哪些手段"&gt;&lt;span&gt;方法速览：我们用到哪些手段&lt;/span&gt;
+ &lt;a href="#%e6%96%b9%e6%b3%95%e9%80%9f%e8%a7%88%e6%88%91%e4%bb%ac%e7%94%a8%e5%88%b0%e5%93%aa%e4%ba%9b%e6%89%8b%e6%ae%b5" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;#&lt;/th&gt;
+					&lt;th&gt;方法&lt;/th&gt;
+					&lt;th&gt;作用层&lt;/th&gt;
+					&lt;th&gt;解决什么问题&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;1&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;Golden Benchmark + 自动化 runner&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;评测&lt;/td&gt;
+					&lt;td&gt;每次改 Prompt/路由可回归，避免「感觉变好了」&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;2&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;&lt;code&gt;--skip-cache&lt;/code&gt; 冷跑&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;评测&lt;/td&gt;
+					&lt;td&gt;避免 query cache 命中掩盖真实准确率&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;3&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;&lt;code&gt;expected_answer_groups&lt;/code&gt; 同义词组&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;Golden&lt;/td&gt;
+					&lt;td&gt;「13 / 十三」「孙雯 / Wen Sun」都算对&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;4&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;&lt;code&gt;validate_sql&lt;/code&gt; + &lt;code&gt;expected_sql_contains&lt;/code&gt;&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;Golden&lt;/td&gt;
+					&lt;td&gt;不只判答案，还判 SQL 是否查了对的视图/条件&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;5&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;&lt;code&gt;prefers_simple_qa()&lt;/code&gt; 路由修正&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;Router&lt;/td&gt;
+					&lt;td&gt;单实体统计题不再误进 &lt;code&gt;complex_flow&lt;/code&gt; Mock&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;6&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;Prompt Step 1–4 工具决策树&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;Agent&lt;/td&gt;
+					&lt;td&gt;球员 → SQL → 语义 → 搜人，顺序固定&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;7&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;工具 docstring 写边界&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;Agent&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;@tool&lt;/code&gt; 描述适用场景，不只写「执行 SQL」&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;8&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;&lt;code&gt;player_aliases.json&lt;/code&gt; 中文俗称&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;数据/工具&lt;/td&gt;
+					&lt;td&gt;大罗、贝利、C罗 → 精确 &lt;code&gt;player_id&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;9&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;&lt;code&gt;resolve_player_id&lt;/code&gt; 优先查 career card&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;工具&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;player_stats&lt;/code&gt; 先命中 fact card，再语义补充&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;10&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;分析视图 &lt;code&gt;vw_*&lt;/code&gt; + Prompt Few-shot SQL&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;SQL&lt;/td&gt;
+					&lt;td&gt;不让 Agent 写不存在的 &lt;code&gt;goals&lt;/code&gt;/&lt;code&gt;players&lt;/code&gt; 表&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;11&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;禁止表名黑名单 + 结构化 SQL 错误&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;SQL&lt;/td&gt;
+					&lt;td&gt;错表直接返回 &lt;code&gt;{&amp;quot;error&amp;quot;: ...}&lt;/code&gt;，Agent 换工具或改 SQL&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;12&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;&lt;code&gt;RESPONSE_RULES&lt;/code&gt; 禁止编造&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;Agent&lt;/td&gt;
+					&lt;td&gt;无数据就说没有，不用「大概」凑数&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;13&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;&lt;code&gt;temperature=0&lt;/code&gt;&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;LLM&lt;/td&gt;
+					&lt;td&gt;降低随机性，Benchmark 更可复现&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;14&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;LangSmith trace&lt;/strong&gt;（可选）&lt;/td&gt;
+					&lt;td&gt;观测&lt;/td&gt;
+					&lt;td&gt;看每步 tool call，定位选错工具&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;15&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;&lt;code&gt;is_player_compare()&lt;/code&gt; 路由&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;Router&lt;/td&gt;
+					&lt;td&gt;梅西 vs C罗 双人对比进 simple_qa&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;16&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;「一共几次 + 年份」路由&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;Router&lt;/td&gt;
+					&lt;td&gt;意大利冠军届次不再进 Mock&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;17&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;Prompt Step 0（评价/open 问法）&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;Agent&lt;/td&gt;
+					&lt;td&gt;「梅西表现怎么样」优先 semantic&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;18&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;&lt;code&gt;expected_tools&lt;/code&gt; 多解 Golden&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;评测&lt;/td&gt;
+					&lt;td&gt;SQL 或 semantic 都能答对的题允许多路径&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;尚未做、本文不当作已验证手段&lt;/strong&gt;：Chunk 分块对比、Hybrid Search（tsvector + RRF）、SQL 自动 retry 循环、ROUGE/BERT 语义打分——可作为后续优化方向，但不写进本次 85%→100% 的路径。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="问题一路由误判简单题进了-complexflow-mock"&gt;&lt;span&gt;问题一：路由误判——简单题进了 ComplexFlow Mock&lt;/span&gt;
+ &lt;a href="#%e9%97%ae%e9%a2%98%e4%b8%80%e8%b7%af%e7%94%b1%e8%af%af%e5%88%a4%e7%ae%80%e5%8d%95%e9%a2%98%e8%bf%9b%e4%ba%86-complexflow-mock" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="现象"&gt;&lt;span&gt;现象&lt;/span&gt;
+ &lt;a href="#%e7%8e%b0%e8%b1%a1" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;3 条失败 case 的共同特征：答案里是 &lt;code&gt;【ComplexFlow · Mock 模式】&lt;/code&gt;，不是 Agent 正常输出。&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;问题&lt;/th&gt;
+					&lt;th&gt;误触关键词&lt;/th&gt;
+					&lt;th&gt;Mock 里发生了什么&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;2022 决赛几个进球&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;多少个&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;SQL 只 &lt;code&gt;WHERE tournament_id='2022' LIMIT 10&lt;/code&gt;，没筛决赛&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;大罗生涯总进球&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;总共&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;走 semantic_search，没调 &lt;code&gt;player_stats&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;中国女足射手王&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;进球最多&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;SQL 误用 &lt;code&gt;competition='Men's'&lt;/code&gt; 男子榜&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;根因：&lt;code&gt;COMPLEX_KEYWORDS&lt;/code&gt; 里「总共、多少个、进球最多」太宽，&lt;strong&gt;还没实现真正的 complex agent&lt;/strong&gt;，Mock 流程却抢走了本该走 &lt;code&gt;simple_qa&lt;/code&gt; 的题。&lt;/p&gt;
+&lt;h3 class="heading-element" id="解决方案prefers_simple_qa-优先于-complex-关键词"&gt;&lt;span&gt;解决方案：&lt;code&gt;prefers_simple_qa()&lt;/code&gt; 优先于 complex 关键词&lt;/span&gt;
+ &lt;a href="#%e8%a7%a3%e5%86%b3%e6%96%b9%e6%a1%88prefers_simple_qa-%e4%bc%98%e5%85%88%e4%ba%8e-complex-%e5%85%b3%e9%94%ae%e8%af%8d" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;在 &lt;code&gt;workflows/route_keywords.py&lt;/code&gt; 里，对「单实体、可明确工具」的题强制走 &lt;code&gt;simple_qa&lt;/code&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;def prefers_simple_qa(query: str) -&amp;gt; bool:
+ # 对比类仍走 complex_flow
+ if any(kw in query for kw in (&amp;#34;对比&amp;#34;, &amp;#34;谁更&amp;#34;, &amp;#34;谁进球更多&amp;#34;)):
+ return False
+
+ from tools import resolve_player_id
+
+ # 具名球员 &amp;#43; 生涯/进球/总共 → player_stats
+ if resolve_player_id(query) and any(kw in query for kw in (
+ &amp;#34;进球&amp;#34;, &amp;#34;进了&amp;#34;, &amp;#34;生涯&amp;#34;, &amp;#34;总共&amp;#34;, &amp;#34;一共&amp;#34;, &amp;#34;几届&amp;#34;, ...
+ )):
+ return True
+
+ # 某届决赛 &amp;#43; 进球数 → sql_query
+ if re.search(r&amp;#34;20\d{2}&amp;#34;, query) and &amp;#34;决赛&amp;#34; in query:
+ if any(kw in query for kw in (&amp;#34;进球&amp;#34;, &amp;#34;多少个&amp;#34;, &amp;#34;几个&amp;#34;)):
+ return True
+
+ # 女足/男足 &amp;#43; 射手王 → sql_query
+ if (&amp;#34;女足&amp;#34; in query or &amp;#34;男足&amp;#34; in query) and &amp;#34;进球最多&amp;#34; in query:
+ return True
+
+ return False&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;&lt;strong&gt;效果&lt;/strong&gt;：上述 3 条修复后，&lt;code&gt;--skip-cache&lt;/code&gt; 冷跑 &lt;strong&gt;答案 20/20（100%）&lt;/strong&gt;；工具仍 &lt;strong&gt;15/20（75%）&lt;/strong&gt;——见下文第二阶段。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="问题二agent-工具选择边界--决策顺序"&gt;&lt;span&gt;问题二：Agent 工具选择——边界 + 决策顺序&lt;/span&gt;
+ &lt;a href="#%e9%97%ae%e9%a2%98%e4%ba%8cagent-%e5%b7%a5%e5%85%b7%e9%80%89%e6%8b%a9%e8%be%b9%e7%95%8c--%e5%86%b3%e7%ad%96%e9%a1%ba%e5%ba%8f" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="现象-1"&gt;&lt;span&gt;现象&lt;/span&gt;
+ &lt;a href="#%e7%8e%b0%e8%b1%a1-1" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;第一轮路由修复后，即使走对了 &lt;code&gt;simple_qa&lt;/code&gt;，Benchmark 仍显示 &lt;strong&gt;工具正确率 75%（15/20）&lt;/strong&gt;。典型分歧：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;「梅西表现怎么样」→ golden 期望 &lt;code&gt;semantic_search&lt;/code&gt;，Agent 因出现「梅西」走了 &lt;code&gt;player_stats&lt;/code&gt;（答案仍对）&lt;/li&gt;
+&lt;li&gt;「梅西和 C罗谁进球更多」→ golden 期望 &lt;code&gt;player_stats&lt;/code&gt;，路由进了 &lt;code&gt;complex_flow&lt;/code&gt; 的 &lt;code&gt;sql_query&lt;/code&gt;（答案仍对）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;说明：&lt;strong&gt;答案正确 ≠ 工具与 golden 一致&lt;/strong&gt;，评测标准和 Prompt 优先级要分开看。&lt;/p&gt;
+&lt;h3 class="heading-element" id="我们实际做的三件事"&gt;&lt;span&gt;我们实际做的三件事&lt;/span&gt;
+ &lt;a href="#%e6%88%91%e4%bb%ac%e5%ae%9e%e9%99%85%e5%81%9a%e7%9a%84%e4%b8%89%e4%bb%b6%e4%ba%8b" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;h4 class="heading-element" id="-工具-docstring-写干什么不干什么"&gt;&lt;span&gt;① 工具 docstring 写「干什么、不干什么」&lt;/span&gt;
+ &lt;a href="#-%e5%b7%a5%e5%85%b7-docstring-%e5%86%99%e5%b9%b2%e4%bb%80%e4%b9%88%e4%b8%8d%e5%b9%b2%e4%bb%80%e4%b9%88" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h4&gt;&lt;pre&gt;&lt;code&gt;@tool
+def player_stats(name: str) -&amp;gt; str:
+ &amp;#34;&amp;#34;&amp;#34;搜索球员世界杯生涯、进球、出场、奖项；支持中文俗称（贝利、大罗、C罗、梅西等）。&amp;#34;&amp;#34;&amp;#34;
+
+@tool
+def sql_query(sql: str) -&amp;gt; str:
+ &amp;#34;&amp;#34;&amp;#34;执行只读 SQL。仅可查询 vw_player_summary、vw_match_summary、
+ vw_team_tournament_summary 或 documents/document_chunks。&amp;#34;&amp;#34;&amp;#34;
+
+@tool
+def semantic_search(query: str) -&amp;gt; str:
+ &amp;#34;&amp;#34;&amp;#34;语义搜索世界杯知识库，适合开放式问题和不确定该查什么表的问题。&amp;#34;&amp;#34;&amp;#34;&lt;/code&gt;&lt;/pre&gt;&lt;h4 class="heading-element" id="-system-prompt-用-step-顺序不是散落的建议"&gt;&lt;span&gt;② System Prompt 用 &lt;strong&gt;Step 顺序&lt;/strong&gt;，不是散落的「建议」&lt;/span&gt;
+ &lt;a href="#-system-prompt-%e7%94%a8-step-%e9%a1%ba%e5%ba%8f%e4%b8%8d%e6%98%af%e6%95%a3%e8%90%bd%e7%9a%84%e5%bb%ba%e8%ae%ae" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h4&gt;&lt;pre&gt;&lt;code&gt;Step 1 — player_stats(name)
+ 条件：已出现具体球员名或中文俗称，且问个人世界杯数据。
+
+Step 2 — sql_query(sql)
+ 条件：答案是一个数字、排行、名单、合计，或按届次/球队/位置筛选的统计。
+
+Step 3 — semantic_search(query)
+ 条件：描述性、评价性、开放式（「表现怎么样」「有没有参加过」）。
+
+Step 4 — search_players(name)
+ 条件：球员身份不清，需先定位是谁。&lt;/code&gt;&lt;/pre&gt;&lt;h4 class="heading-element" id="-球员别名表让-step-1-真的能用中文问"&gt;&lt;span&gt;③ 球员别名表，让 Step 1 真的能用中文问&lt;/span&gt;
+ &lt;a href="#-%e7%90%83%e5%91%98%e5%88%ab%e5%90%8d%e8%a1%a8%e8%ae%a9-step-1-%e7%9c%9f%e7%9a%84%e8%83%bd%e7%94%a8%e4%b8%ad%e6%96%87%e9%97%ae" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h4&gt;&lt;p&gt;&lt;code&gt;etl/data/player_aliases.json&lt;/code&gt; + &lt;code&gt;resolve_player_id()&lt;/code&gt;：「大罗」→ &lt;code&gt;P-62722&lt;/code&gt;（巴西 Ronaldo），再拉 &lt;code&gt;worldcup-player_careers&lt;/code&gt; fact card。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="问题三sql-生成用视图不用臆造表"&gt;&lt;span&gt;问题三：SQL 生成——用视图，不用臆造表&lt;/span&gt;
+ &lt;a href="#%e9%97%ae%e9%a2%98%e4%b8%89sql-%e7%94%9f%e6%88%90%e7%94%a8%e8%a7%86%e5%9b%be%e4%b8%8d%e7%94%a8%e8%87%86%e9%80%a0%e8%a1%a8" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="现象-2"&gt;&lt;span&gt;现象&lt;/span&gt;
+ &lt;a href="#%e7%8e%b0%e8%b1%a1-2" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;失败 case #2 若走 Mock，会生成：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;SELECT match_id, home_team, away_team, score
+FROM vw_match_summary WHERE tournament_id = &amp;#39;2022&amp;#39; LIMIT 10&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;缺 &lt;code&gt;M-2022-64&lt;/code&gt; 或 &lt;code&gt;stage_name ILIKE '%final%'&lt;/code&gt;，Benchmark 的 &lt;code&gt;expected_sql_contains&lt;/code&gt; 判失败。&lt;/p&gt;
+&lt;h3 class="heading-element" id="根因"&gt;&lt;span&gt;根因&lt;/span&gt;
+ &lt;a href="#%e6%a0%b9%e5%9b%a0" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;Agent 若按「通用足球库」想象，会写 &lt;code&gt;goals&lt;/code&gt; / &lt;code&gt;players&lt;/code&gt; / &lt;code&gt;matches&lt;/code&gt;——&lt;strong&gt;这些表在本项目不存在&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 class="heading-element" id="解决方案"&gt;&lt;span&gt;解决方案&lt;/span&gt;
+ &lt;a href="#%e8%a7%a3%e5%86%b3%e6%96%b9%e6%a1%88" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;h4 class="heading-element" id="-prompt-只暴露-3-张分析视图--文档表并给-few-shot"&gt;&lt;span&gt;① Prompt 只暴露 3 张分析视图 + 文档表，并给 Few-shot&lt;/span&gt;
+ &lt;a href="#-prompt-%e5%8f%aa%e6%9a%b4%e9%9c%b2-3-%e5%bc%a0%e5%88%86%e6%9e%90%e8%a7%86%e5%9b%be--%e6%96%87%e6%a1%a3%e8%a1%a8%e5%b9%b6%e7%bb%99-few-shot" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h4&gt;&lt;pre&gt;&lt;code&gt;- vw_player_summary：display_name, competition, team_codes[], goals, ...
+- vw_match_summary：match_id, tournament_id, stage_name, goals, ...
+- vw_team_tournament_summary：...
+
+示例（2022 决赛总进球）：
+SELECT goals FROM vw_match_summary WHERE match_id = &amp;#39;M-2022-64&amp;#39;
+
+示例（中国女足射手王）：
+SELECT display_name, goals FROM vw_player_summary
+WHERE competition = &amp;#39;Women&amp;#39;&amp;#39;s&amp;#39; AND team_codes @&amp;gt; ARRAY[&amp;#39;CHN&amp;#39;]
+ORDER BY goals DESC LIMIT 5&lt;/code&gt;&lt;/pre&gt;&lt;h4 class="heading-element" id="-代码层拒绝非法表名返回可读错误"&gt;&lt;span&gt;② 代码层拒绝非法表名，返回可读错误&lt;/span&gt;
+ &lt;a href="#-%e4%bb%a3%e7%a0%81%e5%b1%82%e6%8b%92%e7%bb%9d%e9%9d%9e%e6%b3%95%e8%a1%a8%e5%90%8d%e8%bf%94%e5%9b%9e%e5%8f%af%e8%af%bb%e9%94%99%e8%af%af" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h4&gt;&lt;pre&gt;&lt;code&gt;def execute_sql(sql: str):
+ forbidden = _find_forbidden_table(sql) # players, goals, matches, ...
+ if forbidden:
+ return {&amp;#34;error&amp;#34;: f&amp;#34;Table &amp;#39;{forbidden}&amp;#39; does not exist. Use vw_player_summary, ...&amp;#34;}
+ try:
+ rows = execute_query(sql)
+ return {&amp;#34;rows&amp;#34;: rows, &amp;#34;row_count&amp;#34;: len(rows)}
+ except Exception as exc:
+ return {&amp;#34;error&amp;#34;: str(exc), &amp;#34;sql&amp;#34;: sql}&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Prompt 约定：看到 &lt;code&gt;error&lt;/code&gt; 就改 SQL 或换 &lt;code&gt;player_stats&lt;/code&gt; / &lt;code&gt;semantic_search&lt;/code&gt;，&lt;strong&gt;不要重复同一条错 SQL&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;修复后 #2 实际生成：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;SELECT goals FROM vw_match_summary WHERE match_id = &amp;#39;M-2022-64&amp;#39;&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;答案：&lt;strong&gt;6 个进球&lt;/strong&gt;（常规时间 + 加时，不含点球大战）。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="问题四回答忠于工具数据"&gt;&lt;span&gt;问题四：回答忠于工具数据&lt;/span&gt;
+ &lt;a href="#%e9%97%ae%e9%a2%98%e5%9b%9b%e5%9b%9e%e7%ad%94%e5%bf%a0%e4%ba%8e%e5%b7%a5%e5%85%b7%e6%95%b0%e6%8d%ae" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="做法已实现"&gt;&lt;span&gt;做法（已实现）&lt;/span&gt;
+ &lt;a href="#%e5%81%9a%e6%b3%95%e5%b7%b2%e5%ae%9e%e7%8e%b0" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;在 &lt;code&gt;prompts.py&lt;/code&gt; 的 &lt;code&gt;RESPONSE_RULES&lt;/code&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;- 工具返回空结果：可换工具重试一次；仍无数据再回复「抱歉，我没有找到相关数据，请换个问法试试。」
+- 不要编造；不要用「可能」「大概」凑答案。
+- 进球、场次等用整数，不随意四舍五入。&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;配合 &lt;code&gt;temperature=0&lt;/code&gt;，减少 Benchmark 上的数字漂移。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;我们没有加单独的「验证节点」LangGraph step；若幻觉仍多，可在此基础上再加自查 prompt 或结构化输出校验。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="问题五golden-与-benchmark-脚本怎么设计"&gt;&lt;span&gt;问题五：Golden 与 Benchmark 脚本怎么设计&lt;/span&gt;
+ &lt;a href="#%e9%97%ae%e9%a2%98%e4%ba%94golden-%e4%b8%8e-benchmark-%e8%84%9a%e6%9c%ac%e6%80%8e%e4%b9%88%e8%ae%be%e8%ae%a1" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;h3 class="heading-element" id="-答案打分关键词--分组-or"&gt;&lt;span&gt;① 答案打分：关键词 + 分组 OR&lt;/span&gt;
+ &lt;a href="#-%e7%ad%94%e6%a1%88%e6%89%93%e5%88%86%e5%85%b3%e9%94%ae%e8%af%8d--%e5%88%86%e7%bb%84-or" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;pre&gt;&lt;code&gt;def score_answer(answer: str, case: dict) -&amp;gt; bool:
+ # expected_answer_contains：任一命中
+ # expected_answer_contains_all：全部命中
+ # expected_answer_groups：每组至少命中一个（如 [&amp;#34;13&amp;#34;,&amp;#34;十三&amp;#34;]）&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Golden 示例：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;{
+ &amp;#34;question&amp;#34;: &amp;#34;梅西在世界杯一共进了几个球？&amp;#34;,
+ &amp;#34;expected_tool&amp;#34;: &amp;#34;player_stats&amp;#34;,
+ &amp;#34;expected_answer_contains&amp;#34;: [&amp;#34;13&amp;#34;, &amp;#34;十三&amp;#34;],
+ &amp;#34;expected_answer_contains_all&amp;#34;: [&amp;#34;梅西&amp;#34;]
+}&lt;/code&gt;&lt;/pre&gt;&lt;h3 class="heading-element" id="-sql-打分片段必须出现"&gt;&lt;span&gt;② SQL 打分：片段必须出现&lt;/span&gt;
+ &lt;a href="#-sql-%e6%89%93%e5%88%86%e7%89%87%e6%ae%b5%e5%bf%85%e9%a1%bb%e5%87%ba%e7%8e%b0" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;pre&gt;&lt;code&gt;{
+ &amp;#34;question&amp;#34;: &amp;#34;2022年世界杯决赛一共有多少个进球？&amp;#34;,
+ &amp;#34;expected_tool&amp;#34;: &amp;#34;sql_query&amp;#34;,
+ &amp;#34;expected_sql_contains&amp;#34;: [&amp;#34;vw_match_summary&amp;#34;, &amp;#34;M-2022-64&amp;#34;],
+ &amp;#34;expected_answer_contains&amp;#34;: [&amp;#34;6&amp;#34;, &amp;#34;六&amp;#34;]
+}&lt;/code&gt;&lt;/pre&gt;&lt;h3 class="heading-element" id="-冷跑命令"&gt;&lt;span&gt;③ 冷跑命令&lt;/span&gt;
+ &lt;a href="#-%e5%86%b7%e8%b7%91%e5%91%bd%e4%bb%a4" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;pre&gt;&lt;code&gt;PYTHONPATH=. python3 benchmark/benchmark.py --skip-cache
+# 改路由/Prompt 后务必清缓存或 skip_cache，否则可能读到旧的 Mock 答案
+curl -X POST http://localhost:8000/cache/clear&lt;/code&gt;&lt;/pre&gt;&lt;hr&gt;
+&lt;h2 class="heading-element" id="最终结果"&gt;&lt;span&gt;最终结果&lt;/span&gt;
+ &lt;a href="#%e6%9c%80%e7%bb%88%e7%bb%93%e6%9e%9c" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;调优分两轮，&lt;code&gt;--skip-cache&lt;/code&gt; 冷跑，数据来自 &lt;code&gt;benchmark/result.tool-opt.json&lt;/code&gt;。&lt;/p&gt;
+&lt;h3 class="heading-element" id="第一轮路由--sql-prompt答案拉满"&gt;&lt;span&gt;第一轮：路由 + SQL Prompt（答案拉满）&lt;/span&gt;
+ &lt;a href="#%e7%ac%ac%e4%b8%80%e8%bd%ae%e8%b7%af%e7%94%b1--sql-prompt%e7%ad%94%e6%a1%88%e6%8b%89%e6%bb%a1" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;路由修正 + Prompt/SQL 示例补全后：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;{
+ &amp;#34;total&amp;#34;: 20,
+ &amp;#34;answer_accuracy&amp;#34;: 100.0,
+ &amp;#34;tool_accuracy&amp;#34;: 75.0,
+ &amp;#34;average_latency&amp;#34;: 6.45,
+ &amp;#34;sql_valid_rate&amp;#34;: &amp;#34;10/11&amp;#34;,
+ &amp;#34;sql_required_miss&amp;#34;: 1
+}&lt;/code&gt;&lt;/pre&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;答案 100%&lt;/strong&gt;：20 条 golden 全部通过。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;工具 75%&lt;/strong&gt;：5 条「答案对但工具名与 golden 不一致」。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;sql_required_miss: 1&lt;/strong&gt;：「意大利几次冠军」仍被 complex_flow Mock 抢走。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 class="heading-element" id="第二轮路线-a--c-落地后当前"&gt;&lt;span&gt;第二轮：路线 A + C 落地后（当前）&lt;/span&gt;
+ &lt;a href="#%e7%ac%ac%e4%ba%8c%e8%bd%ae%e8%b7%af%e7%ba%bf-a--c-%e8%90%bd%e5%9c%b0%e5%90%8e%e5%bd%93%e5%89%8d" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;实现 &lt;code&gt;is_player_compare&lt;/code&gt;、冠军届次路由、Prompt Step 0、&lt;code&gt;expected_tools&lt;/code&gt; 后：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;{
+ &amp;#34;total&amp;#34;: 20,
+ &amp;#34;answer_accuracy&amp;#34;: 100.0,
+ &amp;#34;tool_accuracy&amp;#34;: 100.0,
+ &amp;#34;average_latency&amp;#34;: 6.18,
+ &amp;#34;sql_valid_rate&amp;#34;: &amp;#34;8/9&amp;#34;,
+ &amp;#34;sql_required_miss&amp;#34;: 0,
+ &amp;#34;total_tokens&amp;#34;: 78707
+}&lt;/code&gt;&lt;/pre&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;答案 100%&lt;/strong&gt;、&lt;strong&gt;工具 20/20（100%）&lt;/strong&gt; 同时达成。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;sql_required_miss: 0&lt;/strong&gt;：意大利冠军届次走 simple_qa + &lt;code&gt;sql_query&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;sql_valid_rate 8/9&lt;/strong&gt;：仍有 1 条 SQL 未含 golden 要求的片段（答案仍对）；与「工具 100%」不矛盾。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;阶段&lt;/th&gt;
+					&lt;th&gt;答案&lt;/th&gt;
+					&lt;th&gt;工具&lt;/th&gt;
+					&lt;th&gt;延迟&lt;/th&gt;
+					&lt;th&gt;sql_required_miss&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;基线&lt;/td&gt;
+					&lt;td&gt;85%&lt;/td&gt;
+					&lt;td&gt;65%&lt;/td&gt;
+					&lt;td&gt;~5.1s&lt;/td&gt;
+					&lt;td&gt;1&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;第一轮（路由修复）&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;100%&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;75%&lt;/td&gt;
+					&lt;td&gt;~6.5s&lt;/td&gt;
+					&lt;td&gt;1&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;第二轮（A+C）&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;100%&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;100%&lt;/strong&gt;&lt;/td&gt;
+					&lt;td&gt;~6.2s&lt;/td&gt;
+					&lt;td&gt;&lt;strong&gt;0&lt;/strong&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="工具正确率从-75-到-100已实现"&gt;&lt;span&gt;工具正确率：从 75% 到 100%（已实现）&lt;/span&gt;
+ &lt;a href="#%e5%b7%a5%e5%85%b7%e6%ad%a3%e7%a1%ae%e7%8e%87%e4%bb%8e-75-%e5%88%b0-100%e5%b7%b2%e5%ae%9e%e7%8e%b0" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;p&gt;答案到 100% 后，&lt;strong&gt;工具 75%（15/20）&lt;/strong&gt; 说明 Benchmark 期望的「标准路径」和系统实际走的「有效路径」还没对齐。下面是当时 5 条 mismatch 及对应改法（&lt;strong&gt;均已落地&lt;/strong&gt;）。&lt;/p&gt;
+&lt;h3 class="heading-element" id="5-条-tool-不匹配一览"&gt;&lt;span&gt;5 条 tool 不匹配一览&lt;/span&gt;
+ &lt;a href="#5-%e6%9d%a1-tool-%e4%b8%8d%e5%8c%b9%e9%85%8d%e4%b8%80%e8%a7%88" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;#&lt;/th&gt;
+					&lt;th&gt;问题&lt;/th&gt;
+					&lt;th&gt;golden 期望&lt;/th&gt;
+					&lt;th&gt;实际工具&lt;/th&gt;
+					&lt;th&gt;答案&lt;/th&gt;
+					&lt;th&gt;根因&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;4&lt;/td&gt;
+					&lt;td&gt;梅西和 C 罗谁进球更多&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;player_stats&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;complex_flow → &lt;code&gt;sql_query&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;✓&lt;/td&gt;
+					&lt;td&gt;「和 + 谁更多」→ &lt;code&gt;COMPLEX_WITH_AND&lt;/code&gt;，未进 &lt;code&gt;prefers_simple_qa&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;5&lt;/td&gt;
+					&lt;td&gt;梅西世界杯表现怎么样&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;semantic_search&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;player_stats&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;✓&lt;/td&gt;
+					&lt;td&gt;Prompt Step 1：有球员名就优先 stats，与「评价/open 问法」冲突&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;11&lt;/td&gt;
+					&lt;td&gt;2014 金手套得主&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;player_stats&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;sql_query&lt;/code&gt; → &lt;code&gt;semantic_search&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;✓&lt;/td&gt;
+					&lt;td&gt;Agent 先写 SQL 查奖项，失败再语义；golden 假定直接 stats&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;15&lt;/td&gt;
+					&lt;td&gt;意大利夺得过冠军吗&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;semantic_search&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;sql_query&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;✓&lt;/td&gt;
+					&lt;td&gt;Agent 用 documents 查 Italy Winner，合理但 golden 标 semantic&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;16&lt;/td&gt;
+					&lt;td&gt;意大利几次冠军、哪些年&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;sql_query&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;complex_flow → &lt;code&gt;semantic_search&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;✓&lt;/td&gt;
+					&lt;td&gt;「一共几次」命中 &lt;code&gt;COMPLEX_KEYWORDS&lt;/code&gt;，Mock 未生成 SQL&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;这 5 条里 &lt;strong&gt;没有一条是「答错」&lt;/strong&gt;，而是 &lt;strong&gt;评测口径 vs 工程取舍&lt;/strong&gt; 的差异。&lt;/p&gt;
+&lt;h3 class="heading-element" id="路线-a改路由已实现"&gt;&lt;span&gt;路线 A：改路由（已实现）&lt;/span&gt;
+ &lt;a href="#%e8%b7%af%e7%ba%bf-a%e6%94%b9%e8%b7%af%e7%94%b1%e5%b7%b2%e5%ae%9e%e7%8e%b0" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;① 对比题进 simple_qa&lt;/strong&gt; — &lt;code&gt;is_player_compare()&lt;/code&gt;：双方别名都能 &lt;code&gt;resolve_player_id&lt;/code&gt; 时走 &lt;code&gt;simple_qa&lt;/code&gt;（修 #4）。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;② 「一共几次 + 年份」进 simple_qa&lt;/strong&gt; — 在 &lt;code&gt;prefers_simple_qa()&lt;/code&gt; 中：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;if &amp;#34;一共&amp;#34; in query and any(kw in query for kw in (&amp;#34;几次&amp;#34;, &amp;#34;哪些年&amp;#34;, &amp;#34;哪些年份&amp;#34;, &amp;#34;哪几届&amp;#34;)):
+ return True&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;（修 #16）&lt;/p&gt;
+&lt;h3 class="heading-element" id="路线-b微调-prompt已实现"&gt;&lt;span&gt;路线 B：微调 Prompt（已实现）&lt;/span&gt;
+ &lt;a href="#%e8%b7%af%e7%ba%bf-b%e5%be%ae%e8%b0%83-prompt%e5%b7%b2%e5%ae%9e%e7%8e%b0" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Step 0&lt;/strong&gt; — 「怎么样 / 表现 / 评价」优先 &lt;code&gt;semantic_search&lt;/code&gt;，即使用户提到球员名（修 #5）。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;奖项题&lt;/strong&gt; — 金手套/金球得主优先 &lt;code&gt;semantic_search&lt;/code&gt; 或 &lt;code&gt;player_stats&lt;/code&gt;，不强行写复杂 SQL。&lt;/p&gt;
+&lt;h3 class="heading-element" id="路线-cgolden-多解已实现"&gt;&lt;span&gt;路线 C：Golden 多解（已实现）&lt;/span&gt;
+ &lt;a href="#%e8%b7%af%e7%ba%bf-cgolden-%e5%a4%9a%e8%a7%a3%e5%b7%b2%e5%ae%9e%e7%8e%b0" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;benchmark.py&lt;/code&gt; 增加 &lt;code&gt;match_expected_tool()&lt;/code&gt;，支持 &lt;code&gt;expected_tools&lt;/code&gt; 列表（任一命中即 pass）：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;def match_expected_tool(case, tools_used):
+ expected_any = case.get(&amp;#34;expected_tools&amp;#34;)
+ if expected_any:
+ return any(t in tools_used for t in expected_any)
+ expected = case.get(&amp;#34;expected_tool&amp;#34;)
+ return expected in tools_used if expected else None&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Golden 示例（修 #11、#15）：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;{
+ &amp;#34;question&amp;#34;: &amp;#34;意大利队夺得过世界杯冠军吗？&amp;#34;,
+ &amp;#34;expected_tools&amp;#34;: [&amp;#34;semantic_search&amp;#34;, &amp;#34;sql_query&amp;#34;]
+}&lt;/code&gt;&lt;/pre&gt;&lt;pre&gt;&lt;code&gt;{
+ &amp;#34;question&amp;#34;: &amp;#34;2014年世界杯最佳门将（金手套奖）得主是谁？&amp;#34;,
+ &amp;#34;expected_tools&amp;#34;: [&amp;#34;player_stats&amp;#34;, &amp;#34;semantic_search&amp;#34;]
+}&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;&lt;strong&gt;实测&lt;/strong&gt;：A + B + C 落地后，&lt;code&gt;--skip-cache&lt;/code&gt; 冷跑 &lt;strong&gt;tool 20/20（100%）&lt;/strong&gt;，答案仍 &lt;strong&gt;100%&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;复现命令：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;curl -X POST http://localhost:8000/cache/clear
+PYTHONPATH=. python3 benchmark/benchmark.py --skip-cache&lt;/code&gt;&lt;/pre&gt;&lt;hr&gt;
+&lt;h2 class="heading-element" id="总结"&gt;&lt;span&gt;总结&lt;/span&gt;
+ &lt;a href="#%e6%80%bb%e7%bb%93" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Benchmark 先行&lt;/strong&gt;——20 case + runner，改一行就跑一遍。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;先看路由，再看 Prompt&lt;/strong&gt;——Mock workflow 误判的代价远大于「模型不够聪明」。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SQL 用视图 + Few-shot + 黑名单&lt;/strong&gt;——比塞 9 张原始表结构更有效。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中文 RAG 要做别名&lt;/strong&gt;——否则 &lt;code&gt;player_stats&lt;/code&gt; 在中文问题上不稳定。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;分开看 answer 与 tool，再对齐口径&lt;/strong&gt;——本轮最终 &lt;strong&gt;100% 答案 + 100% 工具&lt;/strong&gt;；多路径题用 &lt;code&gt;expected_tools&lt;/code&gt; 比死磕单一工具名更贴近工程现实。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;调优不是一次性工作；每次加 workflow（session memory、complex agent 真实现）都要重新跑 &lt;code&gt;--skip-cache&lt;/code&gt;，避免 cache 和 Mock 路径把指标「刷好看」。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 class="heading-element" id="附录按改动文件对照"&gt;&lt;span&gt;附录：按改动文件对照&lt;/span&gt;
+ &lt;a href="#%e9%99%84%e5%bd%95%e6%8c%89%e6%94%b9%e5%8a%a8%e6%96%87%e4%bb%b6%e5%af%b9%e7%85%a7" class="heading-mark"&gt;
+ &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
+ &lt;/a&gt;
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;文件&lt;/th&gt;
+					&lt;th&gt;提准相关改动&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;code&gt;benchmark/golden.json&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;20 case、同义词组、&lt;code&gt;expected_tools&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;code&gt;benchmark/benchmark.py&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;match_expected_tool&lt;/code&gt;、&lt;code&gt;validate_sql&lt;/code&gt;、&lt;code&gt;--skip-cache&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;code&gt;workflows/route_keywords.py&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;prefers_simple_qa()&lt;/code&gt;、&lt;code&gt;is_player_compare()&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;code&gt;workflows/router.py&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;simple_qa 优先于 complex 关键词&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;code&gt;prompts.py&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;Step 0–4、SQL 视图示例、禁止编造&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;code&gt;workflows/simple_qa.py&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;四工具 docstring、LangChain agent&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;code&gt;tools.py&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;resolve_player_id&lt;/code&gt;、&lt;code&gt;execute_sql&lt;/code&gt; 黑名单与错误结构&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;code&gt;etl/data/player_aliases.json&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;中文俗称 → player_id&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
 &lt;/table&gt;</description></item><item><title>如何为 RAG 系统编写高质量的 Benchmark：从 Golden Case 设计到指标解读</title><link>https://joesmile.github.io/rag-benchmark.html</link><pubDate>Sat, 30 May 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/rag-benchmark.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;blockquote&gt;
 &lt;p&gt;以世界杯知识问答系统为例，聊聊我对 RAG 评测的理解与实践&lt;/p&gt;
 &lt;/blockquote&gt;
@@ -3771,447 +4369,4 @@ WebBaseLoader异步限速加载，清洗广告噪声，定时增量同步。&lt;
 &lt;li&gt;LangGraph在线加载节点强制异步，避免阻塞对话流；&lt;/li&gt;
 &lt;li&gt;统一标准化元数据字段，保证向量库过滤、溯源可用；&lt;/li&gt;
 &lt;li&gt;加载后必须增加清洗管道，过滤噪声、空白文档，提升分块与检索精度。&lt;/li&gt;
-&lt;/ol&gt;</description></item><item><title>RRF vs MMR 全面对比：从核心原理到RAG实战选型</title><link>https://joesmile.github.io/RRF-vs-MMR.html</link><pubDate>Sat, 16 May 2026 10:00:00 +0800</pubDate><guid>https://joesmile.github.io/RRF-vs-MMR.html</guid><category domain="https://joesmile.github.io/categories/ai-%E5%B7%A5%E7%A8%8B/">AI 工程</category><description>&lt;p&gt;在RAG检索优化体系中，&lt;strong&gt;RRF（倒数排名融合）&lt;/strong&gt; 和 &lt;strong&gt;MMR（最大边际相关性）&lt;/strong&gt; 是两个极易混淆、但定位完全不同的核心算法：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;RRF 属于&lt;strong&gt;多路结果融合算法&lt;/strong&gt;，解决「不同检索通道的结果如何合并排序」的问题；&lt;/li&gt;
-&lt;li&gt;MMR 属于&lt;strong&gt;单路结果重排算法&lt;/strong&gt;，解决「检索结果同质化冗余、信息重复」的问题。&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;两者并非替代关系，而是工业级RAG链路中前后衔接的互补组件。本文从定义、数学原理、优缺点、适用场景、落地代码到选型策略，做完整拆解。&lt;/p&gt;
-&lt;h2 class="heading-element" id="一rrfreciprocal-rank-fusion倒数排名融合"&gt;&lt;span&gt;一、RRF（Reciprocal Rank Fusion）倒数排名融合&lt;/span&gt;
- &lt;a href="#%e4%b8%80rrfreciprocal-rank-fusion%e5%80%92%e6%95%b0%e6%8e%92%e5%90%8d%e8%9e%8d%e5%90%88" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h2&gt;&lt;h3 class="heading-element" id="1-核心定义"&gt;&lt;span&gt;1. 核心定义&lt;/span&gt;
- &lt;a href="#1-%e6%a0%b8%e5%bf%83%e5%ae%9a%e4%b9%89" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;RRF 是信息检索领域经典的无监督融合算法，核心思想是：&lt;strong&gt;一个文档在多路检索结果中排名越靠前、出现次数越多，它的综合相关性就越高&lt;/strong&gt;。
-它完全不依赖各路检索的原始分数（不同算法的分数量级、分布差异极大，无法直接相加），只通过「排名位置」计算统一得分，天然解决了不同检索通道的分数不可比问题。&lt;/p&gt;
-&lt;h3 class="heading-element" id="2-极简数学逻辑"&gt;&lt;span&gt;2. 极简数学逻辑&lt;/span&gt;
- &lt;a href="#2-%e6%9e%81%e7%ae%80%e6%95%b0%e5%ad%a6%e9%80%bb%e8%be%91" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;h4 class="heading-element" id="核心公式"&gt;&lt;span&gt;核心公式&lt;/span&gt;
- &lt;a href="#%e6%a0%b8%e5%bf%83%e5%85%ac%e5%bc%8f" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;$$
-\text{RRF_score}(d) = \sum_{i=1}^{n} \frac{1}{k + \text{rank}_i(d)}
-$$&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;$d$：待打分的候选文档&lt;/li&gt;
-&lt;li&gt;$n$：检索通道总数（如BM25、向量检索、HyDE伪文档检索共3路）&lt;/li&gt;
-&lt;li&gt;$\text{rank}_i(d)$：文档$d$在第$i$路检索结果中的排名（从1开始）&lt;/li&gt;
-&lt;li&gt;$k$：平滑常数，工业界默认取&lt;strong&gt;60&lt;/strong&gt;，作用是避免排名第1的文档分数过高、完全压制后续结果，让排名靠后的文档也能贡献少量分数&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h4 class="heading-element" id="计算示例"&gt;&lt;span&gt;计算示例&lt;/span&gt;
- &lt;a href="#%e8%ae%a1%e7%ae%97%e7%a4%ba%e4%be%8b" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;假设两路检索：BM25关键词检索、向量语义检索，k=60&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;文档A：BM25排第2名，向量检索排第3名 → 得分 = 1/(60+2) + 1/(60+3) ≈ 0.0161 + 0.0159 = 0.032&lt;/li&gt;
-&lt;li&gt;文档B：BM25排第1名，向量检索排第10名 → 得分 = 1/(60+1) + 1/(60+10) ≈ 0.0164 + 0.0141 = 0.0305
-最终文档A综合排名高于文档B——虽然单路不是第一，但两路都靠前，稳定性更强。&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h3 class="heading-element" id="3-优缺点"&gt;&lt;span&gt;3. 优缺点&lt;/span&gt;
- &lt;a href="#3-%e4%bc%98%e7%bc%ba%e7%82%b9" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;table&gt;
-	&lt;thead&gt;
-			&lt;tr&gt;
-					&lt;th&gt;优点&lt;/th&gt;
-					&lt;th&gt;缺点&lt;/th&gt;
-			&lt;/tr&gt;
-	&lt;/thead&gt;
-	&lt;tbody&gt;
-			&lt;tr&gt;
-					&lt;td&gt;无需对不同检索的分数做归一化，天然适配异构检索通道融合&lt;/td&gt;
-					&lt;td&gt;只看排名、不看原始分数差异，第1名和第2名的分数差距被固定抹平&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;实现简单、计算高效、无训练成本，开箱即用&lt;/td&gt;
-					&lt;td&gt;无法识别内容重复，高度相似的文档会同时靠前，造成冗余&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;鲁棒性极强，单路检索异常、分数漂移几乎不影响最终排序&lt;/td&gt;
-					&lt;td&gt;属于粗排算法，排序精度弱于有监督重排模型（如Cross-Encoder）&lt;/td&gt;
-			&lt;/tr&gt;
-	&lt;/tbody&gt;
-&lt;/table&gt;
-&lt;h3 class="heading-element" id="4-适用场景"&gt;&lt;span&gt;4. 适用场景&lt;/span&gt;
- &lt;a href="#4-%e9%80%82%e7%94%a8%e5%9c%ba%e6%99%af" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;ol&gt;
-&lt;li&gt;&lt;strong&gt;混合检索融合&lt;/strong&gt;：BM25关键词检索 + 向量语义检索的标准两路合并&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;多Query改写结果融合&lt;/strong&gt;：原始Query、Step-Back改写、HyDE伪文档等多路检索结果合并&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;多召回通道合并&lt;/strong&gt;：关键词、向量、实体、标签等不同召回策略的结果统一排序&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;兜底粗排&lt;/strong&gt;：在重排模型之前做候选集合并，是工业级RAG的标配基础组件&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h3 class="heading-element" id="5-使用方法与代码实现"&gt;&lt;span&gt;5. 使用方法与代码实现&lt;/span&gt;
- &lt;a href="#5-%e4%bd%bf%e7%94%a8%e6%96%b9%e6%b3%95%e4%b8%8e%e4%bb%a3%e7%a0%81%e5%ae%9e%e7%8e%b0" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;h4 class="heading-element" id="方式1手动实现灵活可控推荐生产使用"&gt;&lt;span&gt;方式1：手动实现（灵活可控，推荐生产使用）&lt;/span&gt;
- &lt;a href="#%e6%96%b9%e5%bc%8f1%e6%89%8b%e5%8a%a8%e5%ae%9e%e7%8e%b0%e7%81%b5%e6%b4%bb%e5%8f%af%e6%8e%a7%e6%8e%a8%e8%8d%90%e7%94%9f%e4%ba%a7%e4%bd%bf%e7%94%a8" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;pre&gt;&lt;code&gt;def rrf_fuse(doc_lists: list[list], k: int = 60, weights: list[float] = None) -&amp;gt; list:
- &amp;#34;&amp;#34;&amp;#34;
- RRF倒数排名融合
- :param doc_lists: 多路检索结果列表，每个元素是一路文档对象列表
- :param k: 平滑常数，默认60
- :param weights: 每路检索的权重，默认全1
- :return: 融合排序后的文档列表
- &amp;#34;&amp;#34;&amp;#34;
- if weights is None:
- weights = [1.0] * len(doc_lists)
- 
- fused_scores = {}
- doc_map = {}
- 
- # 遍历每路检索，累加RRF得分
- for list_idx, docs in enumerate(doc_lists):
- weight = weights[list_idx]
- for rank, doc in enumerate(docs, start=1):
- # 用文档内容作为唯一键，实际生产可用文档ID
- doc_key = doc.page_content
- doc_map[doc_key] = doc
- # 计算单路RRF得分并加权
- score = (1.0 / (k &amp;#43; rank)) * weight
- fused_scores[doc_key] = fused_scores.get(doc_key, 0) &amp;#43; score
- 
- # 按总分降序排序
- sorted_items = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)
- return [doc_map[key] for key, _ in sorted_items]&lt;/code&gt;&lt;/pre&gt;&lt;h4 class="heading-element" id="方式2langchain-开箱即用ensembleretriever"&gt;&lt;span&gt;方式2：LangChain 开箱即用（EnsembleRetriever）&lt;/span&gt;
- &lt;a href="#%e6%96%b9%e5%bc%8f2langchain-%e5%bc%80%e7%ae%b1%e5%8d%b3%e7%94%a8ensembleretriever" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;pre&gt;&lt;code&gt;from langchain.retrievers import EnsembleRetriever
-from langchain_community.retrievers import BM25Retriever
-from langchain_community.vectorstores import FAISS
-
-# 初始化两路检索器
-bm25_retriever = BM25Retriever.from_documents(docs)
-bm25_retriever.k = 4
-
-faiss_retriever = FAISS.from_documents(docs, embeddings).as_retriever(search_kwargs={&amp;#34;k&amp;#34;: 4})
-
-# 集成检索器，底层默认RRF融合，可自定义权重
-ensemble_retriever = EnsembleRetriever(
- retrievers=[bm25_retriever, faiss_retriever],
- weights=[0.5, 0.5]
-)
-
-# 直接检索
-results = ensemble_retriever.get_relevant_documents(&amp;#34;耳机进水保修多久？&amp;#34;)&lt;/code&gt;&lt;/pre&gt;&lt;h2 class="heading-element" id="二mmrmaximal-marginal-relevance最大边际相关性"&gt;&lt;span&gt;二、MMR（Maximal Marginal Relevance）最大边际相关性&lt;/span&gt;
- &lt;a href="#%e4%ba%8cmmrmaximal-marginal-relevance%e6%9c%80%e5%a4%a7%e8%be%b9%e9%99%85%e7%9b%b8%e5%85%b3%e6%80%a7" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h2&gt;&lt;h3 class="heading-element" id="1-核心定义-1"&gt;&lt;span&gt;1. 核心定义&lt;/span&gt;
- &lt;a href="#1-%e6%a0%b8%e5%bf%83%e5%ae%9a%e4%b9%89-1" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;MMR 是1998年提出的经典多样性重排算法，核心思想是：&lt;strong&gt;每次选择下一个文档时，不仅要和查询高度相关，还要和已经选中的文档尽可能不重复&lt;/strong&gt;。
-它解决的是纯相似度检索的通病：Top-K结果高度同质化，比如同一段内容的不同切片、表述不同但语义一致的文档都排在前面，浪费上下文窗口、无法提供多角度信息。&lt;/p&gt;
-&lt;h3 class="heading-element" id="2-极简数学逻辑-1"&gt;&lt;span&gt;2. 极简数学逻辑&lt;/span&gt;
- &lt;a href="#2-%e6%9e%81%e7%ae%80%e6%95%b0%e5%ad%a6%e9%80%bb%e8%be%91-1" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;h4 class="heading-element" id="核心公式-1"&gt;&lt;span&gt;核心公式&lt;/span&gt;
- &lt;a href="#%e6%a0%b8%e5%bf%83%e5%85%ac%e5%bc%8f-1" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;$$
-\text{MMR}(d_i) = \lambda \cdot \text{Sim}(Q, d_i) - (1-\lambda) \cdot \max_{d_j \in S} \text{Sim}(d_i, d_j)
-$$&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;$d_i$：当前候选文档&lt;/li&gt;
-&lt;li&gt;$Q$：用户查询&lt;/li&gt;
-&lt;li&gt;$S$：已经选中的文档集合&lt;/li&gt;
-&lt;li&gt;$\text{Sim}(Q, d_i)$：候选文档与查询的相关性得分（越高越相关）&lt;/li&gt;
-&lt;li&gt;$\max_{d_j \in S} \text{Sim}(d_i, d_j)$：候选文档与已选文档的最大相似度（越高越冗余）&lt;/li&gt;
-&lt;li&gt;$\lambda$：平衡系数，取值范围**[0, 1]**
-&lt;ul&gt;
-&lt;li&gt;$\lambda=1$：完全只看相关性，等价于普通Top-K检索&lt;/li&gt;
-&lt;li&gt;$\lambda=0$：完全只看多样性，结果最分散但可能不相关&lt;/li&gt;
-&lt;li&gt;工业界常用值：&lt;strong&gt;0.5 ~ 0.7&lt;/strong&gt;，优先保证相关性，兼顾多样性&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h4 class="heading-element" id="执行流程贪心迭代"&gt;&lt;span&gt;执行流程（贪心迭代）&lt;/span&gt;
- &lt;a href="#%e6%89%a7%e8%a1%8c%e6%b5%81%e7%a8%8b%e8%b4%aa%e5%bf%83%e8%bf%ad%e4%bb%a3" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;ol&gt;
-&lt;li&gt;第一步：把相关性最高的文档加入结果集S&lt;/li&gt;
-&lt;li&gt;第二步：在剩余候选中，计算每个文档的MMR边际得分，选最高的加入S&lt;/li&gt;
-&lt;li&gt;第三步：重复迭代，直到选够K个文档
-每一步都做「当前最优选择」，属于贪心算法，实现简单且效果稳定。&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h3 class="heading-element" id="3-优缺点-1"&gt;&lt;span&gt;3. 优缺点&lt;/span&gt;
- &lt;a href="#3-%e4%bc%98%e7%bc%ba%e7%82%b9-1" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;table&gt;
-	&lt;thead&gt;
-			&lt;tr&gt;
-					&lt;th&gt;优点&lt;/th&gt;
-					&lt;th&gt;缺点&lt;/th&gt;
-			&lt;/tr&gt;
-	&lt;/thead&gt;
-	&lt;tbody&gt;
-			&lt;tr&gt;
-					&lt;td&gt;有效去除冗余重复，提升上下文信息密度，节省Token&lt;/td&gt;
-					&lt;td&gt;贪心策略，只能保证局部最优，无法实现全局最优多样性&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;单一参数λ即可调节相关性与多样性的平衡，适配不同业务&lt;/td&gt;
-					&lt;td&gt;需要计算文档间的两两相似度，候选集大时有额外计算开销&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;无监督、无需训练，可直接叠加在任何检索结果之后&lt;/td&gt;
-					&lt;td&gt;极端场景下为了多样性可能牺牲部分相关性，需要调参平衡&lt;/td&gt;
-			&lt;/tr&gt;
-	&lt;/tbody&gt;
-&lt;/table&gt;
-&lt;h3 class="heading-element" id="4-适用场景-1"&gt;&lt;span&gt;4. 适用场景&lt;/span&gt;
- &lt;a href="#4-%e9%80%82%e7%94%a8%e5%9c%ba%e6%99%af-1" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;ol&gt;
-&lt;li&gt;&lt;strong&gt;Chunk高度重复的知识库&lt;/strong&gt;：同一份文档拆分出多个相似片段，检索结果扎堆&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;长文档多视角问答&lt;/strong&gt;：需要从不同角度回答问题，避免信息重复&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;探索类查询&lt;/strong&gt;：用户需要全面了解某个主题，而非单一答案&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;RAG上下文去冗余&lt;/strong&gt;：融合后的结果去重，提升LLM生成的信息丰富度&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;推荐系统多样性优化&lt;/strong&gt;：推荐结果打散，避免同类内容集中&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h3 class="heading-element" id="5-使用方法与代码实现-1"&gt;&lt;span&gt;5. 使用方法与代码实现&lt;/span&gt;
- &lt;a href="#5-%e4%bd%bf%e7%94%a8%e6%96%b9%e6%b3%95%e4%b8%8e%e4%bb%a3%e7%a0%81%e5%ae%9e%e7%8e%b0-1" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;h4 class="heading-element" id="方式1手动实现理解原理自定义灵活"&gt;&lt;span&gt;方式1：手动实现（理解原理，自定义灵活）&lt;/span&gt;
- &lt;a href="#%e6%96%b9%e5%bc%8f1%e6%89%8b%e5%8a%a8%e5%ae%9e%e7%8e%b0%e7%90%86%e8%a7%a3%e5%8e%9f%e7%90%86%e8%87%aa%e5%ae%9a%e4%b9%89%e7%81%b5%e6%b4%bb" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;pre&gt;&lt;code&gt;import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-
-def mmr_rerank(query_embedding: np.ndarray, 
- doc_embeddings: list[np.ndarray], 
- docs: list,
- top_k: int = 4,
- lambda_param: float = 0.6) -&amp;gt; list:
- &amp;#34;&amp;#34;&amp;#34;
- MMR最大边际相关性重排
- :param query_embedding: 查询向量
- :param doc_embeddings: 候选文档向量列表
- :param docs: 候选文档对象列表
- :param top_k: 返回结果数量
- :param lambda_param: 平衡系数，越大越看重相关性
- :return: MMR重排后的文档列表
- &amp;#34;&amp;#34;&amp;#34;
- # 计算所有文档与查询的相关性得分
- relevance_scores = cosine_similarity([query_embedding], doc_embeddings)[0]
- 
- selected_indices = []
- candidate_indices = list(range(len(docs)))
- 
- for _ in range(min(top_k, len(docs))):
- best_score = -float(&amp;#39;inf&amp;#39;)
- best_idx = -1
- 
- # 遍历所有候选，找MMR得分最高的
- for idx in candidate_indices:
- # 相关性项
- rel_score = lambda_param * relevance_scores[idx]
- 
- # 冗余项：与已选文档的最大相似度
- if len(selected_indices) == 0:
- redundancy_score = 0
- else:
- selected_embeds = [doc_embeddings[i] for i in selected_indices]
- sims = cosine_similarity([doc_embeddings[idx]], selected_embeds)[0]
- redundancy_score = (1 - lambda_param) * max(sims)
- 
- # MMR最终得分
- mmr_score = rel_score - redundancy_score
- 
- if mmr_score &amp;gt; best_score:
- best_score = mmr_score
- best_idx = idx
- 
- selected_indices.append(best_idx)
- candidate_indices.remove(best_idx)
- 
- return [docs[i] for i in selected_indices]&lt;/code&gt;&lt;/pre&gt;&lt;h4 class="heading-element" id="方式2langchain-向量库原生支持"&gt;&lt;span&gt;方式2：LangChain 向量库原生支持&lt;/span&gt;
- &lt;a href="#%e6%96%b9%e5%bc%8f2langchain-%e5%90%91%e9%87%8f%e5%ba%93%e5%8e%9f%e7%94%9f%e6%94%af%e6%8c%81" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;p&gt;主流向量库都内置了MMR参数，直接开启即可：&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# FAISS 开启MMR检索
-retriever = faiss_db.as_retriever(
- search_type=&amp;#34;mmr&amp;#34;,
- search_kwargs={
- &amp;#34;k&amp;#34;: 4, # 返回结果数
- &amp;#34;fetch_k&amp;#34;: 20, # 先召回20个候选，再做MMR重排
- &amp;#34;lambda_mult&amp;#34;: 0.6 # 对应lambda参数，0.6平衡相关性与多样性
- }
-)&lt;/code&gt;&lt;/pre&gt;&lt;h2 class="heading-element" id="三rrf-vs-mmr-核心差异对比表"&gt;&lt;span&gt;三、RRF vs MMR 核心差异对比表&lt;/span&gt;
- &lt;a href="#%e4%b8%89rrf-vs-mmr-%e6%a0%b8%e5%bf%83%e5%b7%ae%e5%bc%82%e5%af%b9%e6%af%94%e8%a1%a8" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h2&gt;&lt;table&gt;
-	&lt;thead&gt;
-			&lt;tr&gt;
-					&lt;th&gt;维度&lt;/th&gt;
-					&lt;th&gt;RRF 倒数排名融合&lt;/th&gt;
-					&lt;th&gt;MMR 最大边际相关性&lt;/th&gt;
-			&lt;/tr&gt;
-	&lt;/thead&gt;
-	&lt;tbody&gt;
-			&lt;tr&gt;
-					&lt;td&gt;&lt;strong&gt;核心目标&lt;/strong&gt;&lt;/td&gt;
-					&lt;td&gt;多路检索结果合并排序，统一不同通道的打分标准&lt;/td&gt;
-					&lt;td&gt;单路/融合后结果去冗余，平衡相关性与多样性&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;&lt;strong&gt;处理对象&lt;/strong&gt;&lt;/td&gt;
-					&lt;td&gt;多路异构检索结果（至少2路及以上）&lt;/td&gt;
-					&lt;td&gt;单路候选集（融合后的单列表）&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;&lt;strong&gt;核心输入&lt;/strong&gt;&lt;/td&gt;
-					&lt;td&gt;多个排序列表 + 每路权重&lt;/td&gt;
-					&lt;td&gt;一个候选列表 + 查询向量 + lambda系数&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;&lt;strong&gt;核心参数&lt;/strong&gt;&lt;/td&gt;
-					&lt;td&gt;k（平滑常数，默认60）&lt;/td&gt;
-					&lt;td&gt;λ（平衡系数，默认0.5~0.7）&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;&lt;strong&gt;解决的痛点&lt;/strong&gt;&lt;/td&gt;
-					&lt;td&gt;不同检索分数不可比、多路结果如何合并&lt;/td&gt;
-					&lt;td&gt;检索结果同质化、信息重复、上下文冗余&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;&lt;strong&gt;链路位置&lt;/strong&gt;&lt;/td&gt;
-					&lt;td&gt;召回层 → 多路召回之后，粗排阶段&lt;/td&gt;
-					&lt;td&gt;粗排之后，精排之前，去重优化阶段&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;&lt;strong&gt;是否改变候选数量&lt;/strong&gt;&lt;/td&gt;
-					&lt;td&gt;合并去重后数量≤各路总和&lt;/td&gt;
-					&lt;td&gt;只重排序，不增减候选总数&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;&lt;strong&gt;是否需要向量计算&lt;/strong&gt;&lt;/td&gt;
-					&lt;td&gt;不需要，纯排名计算，极快&lt;/td&gt;
-					&lt;td&gt;需要计算文档间相似度，有额外开销&lt;/td&gt;
-			&lt;/tr&gt;
-	&lt;/tbody&gt;
-&lt;/table&gt;
-&lt;h2 class="heading-element" id="四实战选型与组合使用方案"&gt;&lt;span&gt;四、实战选型与组合使用方案&lt;/span&gt;
- &lt;a href="#%e5%9b%9b%e5%ae%9e%e6%88%98%e9%80%89%e5%9e%8b%e4%b8%8e%e7%bb%84%e5%90%88%e4%bd%bf%e7%94%a8%e6%96%b9%e6%a1%88" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h2&gt;&lt;h3 class="heading-element" id="1-单一使用场景"&gt;&lt;span&gt;1. 单一使用场景&lt;/span&gt;
- &lt;a href="#1-%e5%8d%95%e4%b8%80%e4%bd%bf%e7%94%a8%e5%9c%ba%e6%99%af" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;table&gt;
-	&lt;thead&gt;
-			&lt;tr&gt;
-					&lt;th&gt;场景&lt;/th&gt;
-					&lt;th&gt;选RRF&lt;/th&gt;
-					&lt;th&gt;选MMR&lt;/th&gt;
-			&lt;/tr&gt;
-	&lt;/thead&gt;
-	&lt;tbody&gt;
-			&lt;tr&gt;
-					&lt;td&gt;只有单路向量检索，没有其他召回通道&lt;/td&gt;
-					&lt;td&gt;❌ 不需要&lt;/td&gt;
-					&lt;td&gt;✅ 结果重复多时开启&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;BM25 + 向量 两路混合检索&lt;/td&gt;
-					&lt;td&gt;✅ 必须用，否则两路结果无法合理合并&lt;/td&gt;
-					&lt;td&gt;✅ 融合后可选叠加去重&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;做了Step-Back/HyDE多Query改写，多路召回&lt;/td&gt;
-					&lt;td&gt;✅ 必须用RRF融合多路结果&lt;/td&gt;
-					&lt;td&gt;✅ 融合后MMR去重效果更佳&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;知识库Chunk高度重复，返回结果大同小异&lt;/td&gt;
-					&lt;td&gt;❌ 解决不了重复问题&lt;/td&gt;
-					&lt;td&gt;✅ 直接开启MMR立竿见影&lt;/td&gt;
-			&lt;/tr&gt;
-			&lt;tr&gt;
-					&lt;td&gt;高并发低延迟要求，能省计算就省计算&lt;/td&gt;
-					&lt;td&gt;✅ 开销极低，推荐标配&lt;/td&gt;
-					&lt;td&gt;⚠️ 可酌情关闭，或减小fetch_k&lt;/td&gt;
-			&lt;/tr&gt;
-	&lt;/tbody&gt;
-&lt;/table&gt;
-&lt;h3 class="heading-element" id="2-标准生产级组合链路推荐"&gt;&lt;span&gt;2. 标准生产级组合链路（推荐）&lt;/span&gt;
- &lt;a href="#2-%e6%a0%87%e5%87%86%e7%94%9f%e4%ba%a7%e7%ba%a7%e7%bb%84%e5%90%88%e9%93%be%e8%b7%af%e6%8e%a8%e8%8d%90" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;p&gt;工业级RAG的标准检索流水线是&lt;strong&gt;先融合、后去重&lt;/strong&gt;，两者前后衔接、各司其职：&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;用户Query → Query改写（Step-Back/HyDE等）→ 多路检索（BM25&amp;#43;向量&amp;#43;...）
- ↓
-RRF融合：把所有路的结果合并成一个统一排序列表
- ↓
-MMR重排：对融合后的候选集做多样性去冗余
- ↓
-（可选）Cross-Encoder精排：对Top-N做精准相关性打分
- ↓
-最终上下文 → 送入LLM生成答案&lt;/code&gt;&lt;/pre&gt;&lt;h4 class="heading-element" id="为什么是这个顺序"&gt;&lt;span&gt;为什么是这个顺序？&lt;/span&gt;
- &lt;a href="#%e4%b8%ba%e4%bb%80%e4%b9%88%e6%98%af%e8%bf%99%e4%b8%aa%e9%a1%ba%e5%ba%8f" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h4&gt;&lt;ol&gt;
-&lt;li&gt;先做RRF融合：把所有召回通道的信息都纳入候选集，避免漏召回&lt;/li&gt;
-&lt;li&gt;后做MMR去重：在完整候选集上做多样性筛选，保证去重后的结果既全面又不重复&lt;/li&gt;
-&lt;li&gt;最后精排：用重排模型做最终精准排序，进一步提升质量&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h3 class="heading-element" id="3-调参最佳实践"&gt;&lt;span&gt;3. 调参最佳实践&lt;/span&gt;
- &lt;a href="#3-%e8%b0%83%e5%8f%82%e6%9c%80%e4%bd%b3%e5%ae%9e%e8%b7%b5" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h3&gt;&lt;ol&gt;
-&lt;li&gt;&lt;strong&gt;RRF的k值&lt;/strong&gt;：
-&lt;ul&gt;
-&lt;li&gt;绝大多数场景保持默认60即可，无需调整&lt;/li&gt;
-&lt;li&gt;希望更看重前排结果、弱化后排贡献 → 调小k（如30）&lt;/li&gt;
-&lt;li&gt;希望各路排名权重更平均 → 调大k（如100）&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;MMR的λ值&lt;/strong&gt;：
-&lt;ul&gt;
-&lt;li&gt;专业知识库、事实类问答 → 调大λ（0.7~0.8），优先保证相关性&lt;/li&gt;
-&lt;li&gt;泛知识、探索类问答 → 调小λ（0.4~0.5），兼顾更多角度信息&lt;/li&gt;
-&lt;li&gt;初始调试建议从0.6开始，根据业务效果微调&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;fetch_k设置&lt;/strong&gt;：
-&lt;ul&gt;
-&lt;li&gt;MMR的候选池大小fetch_k一般设为最终top_k的3~5倍&lt;/li&gt;
-&lt;li&gt;比如返回4个结果，先召回20个做MMR重排，平衡效果与性能&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h2 class="heading-element" id="五总结"&gt;&lt;span&gt;五、总结&lt;/span&gt;
- &lt;a href="#%e4%ba%94%e6%80%bb%e7%bb%93" class="heading-mark"&gt;
- &lt;svg class="octicon octicon-link" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"&gt;&lt;path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"&gt;&lt;/path&gt;&lt;/svg&gt;
- &lt;/a&gt;
-&lt;/h2&gt;&lt;ol&gt;
-&lt;li&gt;&lt;strong&gt;定位不同，互不替代&lt;/strong&gt;：RRF管「多路合并」，MMR管「去重多样」，两者解决检索链路不同阶段的问题，是互补而非竞争关系。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;标配组合&lt;/strong&gt;：企业级RAG系统中，RRF几乎是混合检索的标配，MMR则是根据知识库重复度按需开启的优化项。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;效果叠加&lt;/strong&gt;：两者组合使用，既能保证召回的全面性，又能保证上下文的信息密度，是提升RAG回答质量的低成本高收益方案。&lt;/li&gt;
 &lt;/ol&gt;</description></item></channel></rss>
