@@ -284,7 +284,7 @@
  &lt;/a&gt;
 &lt;/h3&gt;&lt;pre&gt;&lt;code&gt;{
  &amp;#34;intent&amp;#34;: &amp;#34;memory_query|psychology_qa|emotion_chat|unknown&amp;#34;,
- &amp;#34;confidence&amp;#34;: 0.0,
+ &amp;#34;confidence&amp;#34;: 0.0 ~ 1.0,
  &amp;#34;source&amp;#34;: &amp;#34;regex|small_model|llm&amp;#34;,
  &amp;#34;entities&amp;#34;: {}
 }&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;&lt;code&gt;source&lt;/code&gt; 标记产出层，便于日志分析；三层都可提炼 &lt;code&gt;entities&lt;/code&gt;。&lt;/p&gt;
